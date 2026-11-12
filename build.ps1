@@ -54,5 +54,9 @@ if(!$SkipTests){
  if($LASTEXITCODE){throw 'Receive accounting test compilation failed'}
  & (Join-Path $tests 'ReceiveAccountingTests.exe')
  if($LASTEXITCODE){throw 'Incoming capacity accounting regression failed'}
+ & $csc /nologo /warnaserror+ ("/r:"+(Join-Path $bin 'BridgeProtocol.dll')) ("/out:"+(Join-Path $tests 'CallsignMetadataTests.exe')) (Join-Path $root 'tests\CallsignMetadataTests.cs')
+ if($LASTEXITCODE){throw 'Callsign metadata test compilation failed'}
+ & (Join-Path $tests 'CallsignMetadataTests.exe')
+ if($LASTEXITCODE){throw 'Callsign metadata contract failed'}
 }
 Write-Output ('BUILD_OK '+$bin)

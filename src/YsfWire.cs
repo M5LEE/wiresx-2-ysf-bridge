@@ -37,8 +37,12 @@ namespace CumbriaCQ.Offline {
    packet[34]=(byte)((sequence<<1)|(end?1:0));Array.Copy(radio,0,packet,35,120);return packet;
   }
   public static byte[] HeaderFrame(string source,int dgId,bool terminator){
+   return HeaderFrame(source,"",dgId,terminator);
+  }
+  public static byte[] HeaderFrame(string source,string downlink,int dgId,bool terminator){
    byte[] firstData=new byte[20];Array.Copy(TextField("**********",10),firstData,10);Array.Copy(TextField(source,10),0,firstData,10,10);
-   byte[] first=EncodeData(firstData),second=EncodeData(TextField("",20));byte[] frame=BaseFrame(terminator?2:0,0,7,dgId);
+   byte[] linkData=TextField("",20);Array.Copy(TextField(downlink,10),linkData,10);
+   byte[] first=EncodeData(firstData),second=EncodeData(linkData);byte[] frame=BaseFrame(terminator?2:0,0,7,dgId);
    for(int i=0;i<5;i++){Array.Copy(first,i*9,frame,30+i*18,9);Array.Copy(second,i*9,frame,39+i*18,9);}
    return frame;
   }
