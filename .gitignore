@@ -1,0 +1,23 @@
+# Generated build/release artifacts
+bin/
+dist/
+tests/bin/
+tests/runtime-*/
+*.pdb
+*.pending
+# Never publish local station identities, captures or operational state
+station.json
+bridge-config.json
+private-baseline/
+room-cache/
+launcher-state/
+discovery-name-backup.json
+*.log
+*.flag
+*.backup*
+progress-*.json
+room-proof-*.json
+adapter-*-result.json
+.env
+*.key
+*.pem

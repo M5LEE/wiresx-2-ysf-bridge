@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-label="M5LEE radio link bridge">
+<!-- Copyright (c) 2026 M5LEE. Original artwork, MIT licence. No vendor logos. -->
+<rect x="8" y="8" width="240" height="240" rx="52" fill="#10233D"/>
+<rect x="12" y="12" width="232" height="232" rx="48" fill="none" stroke="#243D5B" stroke-width="2"/>
+<path d="M66 145C66 65 190 65 190 145" stroke="#F4F9FF" stroke-width="16" fill="none" stroke-linecap="round"/>
+<path d="M66 140V170" stroke="#36DBE7" stroke-width="16" stroke-linecap="round"/><path d="M190 140V170" stroke="#FFBC53" stroke-width="16" stroke-linecap="round"/>
+<circle cx="66" cy="180" r="17" fill="#36DBE7"/><circle cx="190" cy="180" r="17" fill="#FFBC53"/>
+<path d="M97 211H159M97 211L107 201M159 211L149 221" fill="none" stroke="#6B87A5" stroke-width="8" stroke-linecap="round"/>
+<path d="M110 62Q128 42 146 62" fill="none" stroke="#36DBE7" stroke-width="6"/><circle cx="128" cy="74" r="4" fill="#36DBE7"/></svg>

@@ -1,0 +1,17 @@
+name: Windows offline build
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  offline:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compile and run non-hardware tests
+        shell: powershell
+        run: .\build.ps1
+# This workflow does not install drivers, run the bridge, publish releases,
+# or use repository secrets. Installer construction is documented in README.
