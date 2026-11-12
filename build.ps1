@@ -46,5 +46,13 @@ if(!$SkipTests){
  if($LASTEXITCODE){throw 'Launcher UI test build failed'}
  & (Join-Path $tests 'LauncherUiTests.exe') $bin (Join-Path $root 'tests\launcher-ui')
  if($LASTEXITCODE){throw 'Launcher tray/autostart UI tests failed'}
+ & $csc /nologo /warnaserror+ /r:System.Web.Extensions.dll ("/out:"+(Join-Path $tests 'StatusWorkerTests.exe')) (Join-Path $root 'tests\StatusWorkerTests.cs')
+ if($LASTEXITCODE){throw 'Status worker test compilation failed'}
+ & (Join-Path $tests 'StatusWorkerTests.exe') $bin (Join-Path $root 'tests')
+ if($LASTEXITCODE){throw 'Status helper lifecycle tests failed'}
+ & $csc /nologo /warnaserror+ ("/r:"+(Join-Path $bin 'BridgeProtocol.dll')) ("/out:"+(Join-Path $tests 'ReceiveAccountingTests.exe')) (Join-Path $root 'tests\ReceiveAccountingTests.cs')
+ if($LASTEXITCODE){throw 'Receive accounting test compilation failed'}
+ & (Join-Path $tests 'ReceiveAccountingTests.exe')
+ if($LASTEXITCODE){throw 'Incoming capacity accounting regression failed'}
 }
 Write-Output ('BUILD_OK '+$bin)

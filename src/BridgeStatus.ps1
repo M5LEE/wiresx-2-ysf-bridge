@@ -1,4 +1,5 @@
 # Copyright (c) 2026 M5LEE. MIT; see LICENSE.
+param([switch]$Watch)
 $ErrorActionPreference='Stop';$ProgressPreference='SilentlyContinue'
 function Get-BridgeDisplayState($s){
  $code='Stopped';$message='Ready to start. Keep the FTM off; WIRES-X login can take several minutes.';$room=$null;$canStart=$false;$canStop=$false
@@ -56,6 +57,16 @@ function Get-CurrentBridgeStatus {
  $startup=@{Enabled=$false;State='Error';Message='Startup status unavailable.'};try{$startup=Get-BridgeStartupStatus}catch{$startup.Message=$_.Exception.Message}
  return @{Event='Check';Data=@{StatusCode=$view.Code;Summary=$view.Summary;NativeRoom=$view.Room;YsfDestination=$ysf;CanStart=$view.CanStart;CanStop=$view.CanStop;ExistingBridge=$snapshot.ExistingBridge;OwnerManifestPresent=$snapshot.OwnerPresent;SetupReady=$setup;OwnLive=$own;StartupEnabled=$startup.Enabled;StartupState=$startup.State;StartupMessage=$startup.Message;CheckedUtc=[DateTime]::UtcNow.ToString('o');NonInvasive=$true}}
 }
+function Get-BridgeStatusResponse {
+ try{return (Get-CurrentBridgeStatus|ConvertTo-Json -Depth 4 -Compress)}catch{return (@{Event='Check';Data=@{StatusCode='Error';Summary='Unable to verify bridge status. Run the launcher as administrator and check diagnostics.';CanStart=$false;CanStop=$false;StartupEnabled=$false;StartupState='Error';StartupMessage=$_.Exception.Message}}|ConvertTo-Json -Depth 3 -Compress)}
+}
 if($MyInvocation.InvocationName -ne '.'){
- try{Get-CurrentBridgeStatus|ConvertTo-Json -Depth 4 -Compress;exit 0}catch{@{Event='Check';Data=@{StatusCode='Error';Summary='Unable to verify bridge status. Run the launcher as administrator and check diagnostics.';CanStart=$false;CanStop=$false;StartupEnabled=$false;StartupState='Error';StartupMessage=$_.Exception.Message}}|ConvertTo-Json -Depth 3 -Compress;exit 1}
+ if($Watch){
+  # Reuse only the helper process, never a cached status/ownership decision.
+  [Console]::OutputEncoding=[Text.UTF8Encoding]::new($false)
+  while(($request=[Console]::ReadLine()) -ne $null){if($request -cne 'CHECK'){throw 'UnexpectedStatusRequest'};[Console]::WriteLine((Get-BridgeStatusResponse))}
+  exit 0
+ }
+ $response=Get-BridgeStatusResponse;$response
+ if(($response|ConvertFrom-Json).Data.StatusCode -ceq 'Error'){exit 1};exit 0
 }

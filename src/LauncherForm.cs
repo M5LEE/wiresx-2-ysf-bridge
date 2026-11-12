@@ -13,6 +13,7 @@ using System.Runtime.InteropServices;
 sealed class LauncherForm:Form {
  readonly string root;
  readonly Func<string> statusProvider;
+ readonly BridgeStatusWorker statusWorker;
  readonly Action<string> actionHook;
  readonly Func<string,string> startupHook;
  readonly Label headline=new Label(),summary=new Label();
@@ -32,6 +33,7 @@ sealed class LauncherForm:Form {
  public LauncherForm(string root):this(root,false,null,null,null){}
  public LauncherForm(string root,bool autoStart,Func<string> readStatus,Action<string> actionHook,Func<string,string> startupHook){
   this.root=Path.GetFullPath(root);statusProvider=readStatus;this.actionHook=actionHook;this.startupHook=startupHook;autoPending=autoStart;
+  if(readStatus==null)statusWorker=new BridgeStatusWorker(this.root,25000);
   originalIcon=new Icon(Path.Combine(root,"assets","bridge.ico"));Icon=(Icon)originalIcon.Clone();
   Text="WiresX 2 YSF Bridge - Checking";Font=new Font("Segoe UI",10F);StartPosition=FormStartPosition.CenterScreen;ClientSize=new Size(790,490);MinimumSize=new Size(730,460);AutoScaleMode=AutoScaleMode.Dpi;
   var layout=new TableLayoutPanel {Dock=DockStyle.Fill,Padding=new Padding(18),ColumnCount=1,RowCount=7};Controls.Add(layout);
@@ -50,7 +52,7 @@ sealed class LauncherForm:Form {
   startupBox.CheckedChanged+=delegate{if(!applyingStatus)ChangeStartup();};
   Shown+=delegate{if(autoPending)Hide();CheckStatus();};Resize+=delegate{if(WindowState==FormWindowState.Minimized)Hide();};
   FormClosing+=delegate(object sender,FormClosingEventArgs e){if(!allowClose && e.CloseReason==CloseReason.UserClosing){e.Cancel=true;Hide();}};
-  FormClosed+=delegate{refreshTimer.Stop();refreshTimer.Dispose();tray.Visible=false;tray.Dispose();if(statusIcon!=null)statusIcon.Dispose();originalIcon.Dispose();};
+  FormClosed+=delegate{refreshTimer.Stop();refreshTimer.Dispose();if(statusWorker!=null)statusWorker.Dispose();tray.Visible=false;tray.Dispose();if(statusIcon!=null)statusIcon.Dispose();originalIcon.Dispose();};
   refreshTimer.Tick+=delegate{CheckStatus();};refreshTimer.Start();
  }
  void OpenStatus(){Show();WindowState=FormWindowState.Normal;ShowInTaskbar=true;Activate();}
@@ -94,7 +96,7 @@ sealed class LauncherForm:Form {
  }catch(Exception e){pendingStartUntil=DateTime.MinValue;SetPresentation("Error",e.Message);if(actionHook==null)OpenStatus();}}
  void CheckStatus(){
   if(busy || changingStartup || IsDisposed)return;busy=true;check.Enabled=false;var worker=new BackgroundWorker();
-  worker.DoWork+=delegate(object sender,DoWorkEventArgs e){e.Result=statusProvider!=null?statusProvider():RunStatusScript("BridgeStatus.ps1","");};
+  worker.DoWork+=delegate(object sender,DoWorkEventArgs e){e.Result=statusProvider!=null?statusProvider():statusWorker.Read();};
   worker.RunWorkerCompleted+=delegate(object sender,RunWorkerCompletedEventArgs e){busy=false;if(!IsDisposed){
    check.Enabled=true;
    try{
@@ -117,4 +119,33 @@ sealed class LauncherForm:Form {
   worker.DoWork+=delegate(object sender,DoWorkEventArgs e){string action=enable?"Enable":"Disable";e.Result=startupHook!=null?startupHook(action):RunStatusScript("StartupIntegration.ps1","-Action "+action);};
   worker.RunWorkerCompleted+=delegate(object sender,RunWorkerCompletedEventArgs e){changingStartup=false;if(!IsDisposed){try{if(e.Error!=null)throw e.Error;var data=Parse(Convert.ToString(e.Result));if(Flag(data,"Enabled")!=enable || Value(data,"State")=="Error")throw new Exception(Value(data,"Message"));startupInfo.Text=Value(data,"Message");}catch(Exception error){startupInfo.Text=error.Message;if(startupHook==null)MessageBox.Show(this,error.Message,"Startup setting needs attention",MessageBoxButtons.OK,MessageBoxIcon.Warning);}CheckStatus();}worker.Dispose();};worker.RunWorkerAsync();
  }
+}
+
+// A single private, read-only helper per launcher. Every CHECK repeats all checks.
+sealed class BridgeStatusWorker:IDisposable {
+ readonly string root;readonly int timeout;readonly object gate=new object();
+ Process process;volatile bool disposed;
+ public BridgeStatusWorker(string root,int timeout){this.root=Path.GetFullPath(root);this.timeout=timeout;}
+ static void Release(Process p){
+  if(p==null)return;
+  try{p.StandardInput.Close();if(!p.WaitForExit(1000)){p.Kill();p.WaitForExit(3000);}}catch(InvalidOperationException){}catch(System.ComponentModel.Win32Exception){}finally{p.Dispose();}
+ }
+ public string Read(){lock(gate){
+  if(disposed)throw new ObjectDisposedException("BridgeStatusWorker");
+  Process p=process;
+  try{
+   if(p==null){
+    string script=Path.Combine(root,"BridgeStatus.ps1");if(!File.Exists(script))throw new FileNotFoundException("Status component not installed",script);
+    p=new Process();p.StartInfo=new ProcessStartInfo("powershell.exe","-NoProfile -NonInteractive -ExecutionPolicy Bypass -File \""+script+"\" -Watch") {UseShellExecute=false,CreateNoWindow=true,RedirectStandardInput=true,RedirectStandardOutput=true,RedirectStandardError=true,StandardOutputEncoding=Encoding.UTF8};
+    // Drain stderr without retaining station data or allowing a full pipe to stall.
+    p.ErrorDataReceived+=delegate{};p.Start();p.BeginErrorReadLine();process=p;
+    if(disposed)throw new ObjectDisposedException("BridgeStatusWorker");
+   }
+   p.StandardInput.WriteLine("CHECK");p.StandardInput.Flush();
+   var read=p.StandardOutput.ReadLineAsync();if(!read.Wait(timeout))throw new TimeoutException("Status helper timed out; bridge operation is unchanged.");
+   if(read.Result==null)throw new IOException("Status helper exited; refresh to retry.");
+   return read.Result;
+  }catch{if(Object.ReferenceEquals(process,p))process=null;Release(p);throw;}
+ }}
+ public void Dispose(){disposed=true;Release(System.Threading.Interlocked.Exchange(ref process,null));}
 }

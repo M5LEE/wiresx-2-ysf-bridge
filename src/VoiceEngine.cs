@@ -136,7 +136,9 @@ namespace CumbriaCQ.Offline {
    if(info[0]==1 && !inbound){Count("missing-header");return b;}
    if(info[0]==0 && !inbound){
     inbound=true;synced=false;rxEnding=false;rxSource=caller;rxVia=via;rxDue=now+100;rxLast=now;rxCounter=measuredFtm100Receive?5:0;rxExpected=-1;metadata=null;b.Serial.Add(Notice("11"));Count("receive-headers");
-   }else if(info[0]==1 && inbound && !rxEnding && caller==rxSource && via==rxVia && received.Count<4){
+   }else if(info[0]==1 && inbound && !rxEnding && caller==rxSource && via==rxVia){
+    // Preserve admission/pacing exactly; never silently discard capacity losses.
+    if(received.Count>=4){Count("receive-queue-full");return b;}
     int serial=packet[34]>>1;if(rxExpected>=0 && ((serial-rxExpected)&127)>3){Count("sequence-gap");return b;}
     received.Enqueue(YsfWire.ReceiveVoice(packet,dgId,allowZeroDg));rxExpected=(serial+1)&127;rxLast=now;if((packet[34]&1)!=0)rxEnding=true;Count("receive-voice-admitted");
    }else if(info[0]==2 && inbound && caller==rxSource && via==rxVia){

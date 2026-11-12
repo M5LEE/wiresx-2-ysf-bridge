@@ -19,7 +19,9 @@ try{
  Check ($panel.GetControlFromPosition(0,0).Text -ceq 'YSF bridge callsign') 'normal identity field is explicitly YSF-side only'
  Check (!$fields.ContainsKey('OwnRoomId')) 'no native gateway or own-room field is created'
  Check ($ysfChoose -is [Windows.Forms.Button] -and $panel.GetControlFromPosition(0,1).Text -ceq 'YSF destination room') 'normal setup exposes the YSF room chooser'
- Check ($notes.Text -match 'WIRES-X must already be installed, configured and working' -and $notes.Text -match 'currently connected WIRES-X room') 'existing native setup prerequisite and current-room following are explained'
+ Check ($notes.Text -match 'Set up WIRES-X first' -and $notes.Text -match 'room currently connected in WIRES-X') 'simple instructions explain the prerequisite and connected-room behaviour'
+ Check ($notes.Text -notmatch '(?i)\b(FTM|HRI|radio|development|metadata|capture|\x41\x49)\b') 'normal instructions stay focused on ordinary bridge setup'
+ Check ($advanced.Text -ceq 'Advanced setup') 'advanced tools have a plain-language label'
  Check ($portSummary.Text -notlike 'Unable to list ports*') 'Windows port enumeration succeeds without opening devices'
  Check ($panel.RowStyles[2].Height -eq 0 -and !$advanced.Checked) 'normal setup does not ask novice users for COM numbers'
  $advanced.Checked=$true
@@ -44,6 +46,8 @@ try{
  $hash=(Get-FileHash (Join-Path $script:Root 'station.json')).Hash
  function Get-DetectedPorts {return @('COM1','COM10','COM20')}
  $form.Show();[Windows.Forms.Application]::DoEvents();$refreshPorts.PerformClick();[Windows.Forms.Application]::DoEvents()
+ Check ($automatic.Visible -and $existing.Visible -and $portSummary.Visible -and $capture.Visible -and $import.Visible) 'advanced view retains all connection and profile tools'
+ Check ($notes.Text -match 'FTM OFF' -and $notes.Text -match 'radio connected and ON') 'required equipment guidance remains available only in advanced setup'
  Check ($fields.NativePort.Text -ceq 'COM2' -and $fields.AdapterPort.Text -ceq 'COM10') 'refresh button preserves selections including disconnected ports'
  Check ($portSummary.Text -like '*COM2*') 'disconnected selection is reported'
  Check ((Get-FileHash (Join-Path $script:Root 'station.json')).Hash -ceq $hash) 'refresh does not save or alter station data'
@@ -62,6 +66,8 @@ try{
  $fields.AdapterPort.SelectedItem='COM10';$form.PerformLayout();[Windows.Forms.Application]::DoEvents()
  Check ($fields.PhysicalPort.Text -ceq 'COM1' -and $fields.NativePort.Text -ceq 'COM2' -and $fields.AdapterPort.Text -ceq 'COM10') 'final controls show all three intended selections'
  $advanced.Checked=$false;$form.PerformLayout();[Windows.Forms.Application]::DoEvents()
+ Check (!$automatic.Visible -and !$existing.Visible -and !$portSummary.Visible -and !$capture.Visible -and !$import.Visible) 'normal view hides connection, migration and radio tools'
+ Check ($status.Text -notmatch '(?i)\b(FTM|HRI|radio|metadata|capture|\x41\x49)\b') 'normal status stays simple and hardware-neutral'
  Check ($notes.GetPreferredSize((New-Object Drawing.Size($notes.Width,0))).Height -le $notes.Height) 'setup notes fit without clipping'
  $bitmap=New-Object Drawing.Bitmap($form.Width,$form.Height)
  try{$form.DrawToBitmap($bitmap,(New-Object Drawing.Rectangle(0,0,$form.Width,$form.Height)));$bitmap.Save((Join-Path (Split-Path $Bin) 'station-setup-preview.png'),[Drawing.Imaging.ImageFormat]::Png)}finally{$bitmap.Dispose()}
