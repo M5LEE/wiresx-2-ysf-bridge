@@ -10,6 +10,7 @@ try{
  Refuses {Assert-DataPath 'C:\Windows\not-station-data'} 'runtime writes cannot target paths outside station data'
  $s=[pscustomobject]@{SchemaVersion=1;Gateway='TEST1/WX';OwnRoomId='12345';PhysicalPort='COM101';NativePort='COM102';AdapterPort='COM103';NativePath='C:\Program Files (x86)\YAESUMUSEN\WIRES-X\Wires-X.exe';RadioProfileSha256=''}
  Save-Station $s;Check ((Get-Station).OwnRoomId -ceq '12345') 'exact operator room survives save'
+ $s.OwnRoomId='';Save-Station $s;Check ((Get-Station).OwnRoomId -ceq '') 'current-room mode needs no separately entered native room';$s.OwnRoomId='12345';Save-Station $s
  Refuses {Get-Station -RequireProfile} 'voice startup refuses missing owned radio metadata'
  $s.OwnRoomId='1234';Refuses {Save-Station $s} 'short room ID is rejected rather than padded';$s.OwnRoomId='12345'
  $s.AdapterPort='COM101';Refuses {Save-Station $s} 'same physical and virtual port refused';$s.AdapterPort='COM103'

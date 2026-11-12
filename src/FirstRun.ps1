@@ -79,7 +79,7 @@ function Test-PairHealthy($pair){
 }
 function Initialize-StationConnections([string]$Gateway,[string]$OwnRoomId,[string]$PhysicalPort='',[string]$NativePath='',[hashtable]$Ops=$null){
  Assert-DataPath $script:Root
- if($Gateway -cnotmatch '^[A-Z0-9][A-Z0-9 /-]{0,9}$' -or $OwnRoomId -cnotmatch '^[0-9]{5}$' -or $OwnRoomId -ceq '00000'){throw 'Enter your gateway callsign and your five-digit WIRES-X room number first.'}
+ if($Gateway -cnotmatch '^[A-Z0-9][A-Z0-9 /-]{0,9}$' -or ($OwnRoomId -and ($OwnRoomId -cnotmatch '^[0-9]{5}$' -or $OwnRoomId -ceq '00000'))){throw 'Enter the YSF bridge callsign (maximum 10 characters). No WIRES-X gateway ID, node number or fixed room is required.'}
  if(!$Ops){$Ops=@{Guard={Assert-FirstRunSafe};Native={param($path)Find-InstalledWiresX $path};Physical={param($port)Find-HriPort $port};Installed={return [bool](Get-CimInstance Win32_SystemDriver -Filter "Name='com0com'")};Install={foreach($name in @('com0com.sys','com0com.cat')){$null=Assert-DriverPayload $name -Signature};$null=Invoke-DriverTool 'Setup_com0com_v3.0.0.0_W7_x64_signed.exe' '/S' -Installer};Pairs={Get-InstalledPairs};Create={$null=Invoke-DriverTool 'setupc.exe' 'install PortName=COM#,EmuOverrun=yes PortName=COM#,EmuOverrun=yes'};Healthy={param($pair)Test-PairHealthy $pair}}}
  & $Ops.Guard
  $path=& $Ops.Native $NativePath;$physical=& $Ops.Physical $PhysicalPort
@@ -110,7 +110,7 @@ function Initialize-StationConnections([string]$Gateway,[string]$OwnRoomId,[stri
   for($attempt=0;$attempt -lt 30;$attempt++){if(& $Ops.Healthy $pair){$healthy=$true;break};if($Ops.ContainsKey('Wait')){& $Ops.Wait}elseif(!$Ops.ContainsKey('Wait') -and $null -eq $PSBoundParameters['Ops']){Start-Sleep -Milliseconds 500}}
   if(!$healthy){throw 'Windows has not loaded both virtual ports successfully. The driver may be blocked by Windows security or require a restart. No security settings were changed and your station was not overwritten.'}
   $station=[pscustomobject]@{SchemaVersion=1;Gateway=$Gateway;OwnRoomId=$OwnRoomId;PhysicalPort=$physical;NativePort=$pair.NativePort;AdapterPort=$pair.AdapterPort;NativePath=$path;RadioProfileSha256=''}
-  if($old){$same=$true;foreach($key in @('Gateway','OwnRoomId','PhysicalPort','NativePort','AdapterPort','NativePath')){if($station.$key -cne $old.$key){$same=$false}};if($same){$station.RadioProfileSha256=$old.RadioProfileSha256}}
+  if($old){$same=$true;foreach($key in @('PhysicalPort','NativePort','AdapterPort','NativePath')){if($station.$key -cne $old.$key){$same=$false}};if($same){$station.RadioProfileSha256=$old.RadioProfileSha256}}
   Save-Station $station
   @{State='Complete';PairId=$pair.Id;NativePort=$pair.NativePort;AdapterPort=$pair.AdapterPort}|ConvertTo-Json|Set-Content (Join-Path $script:Root 'connection-setup.json') -Encoding UTF8
   return $station

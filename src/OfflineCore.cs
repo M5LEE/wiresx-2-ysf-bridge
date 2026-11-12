@@ -2,6 +2,17 @@
 using System;
 using System.Collections.Generic;
 namespace CumbriaCQ.Offline {
+ public static class TransmitMetadata {
+  // D1F is the write-direction twin of D1G: six fixed ASCII fields,
+  // with either the short position slot or the extended 20-byte hex slot.
+  // Recognising this envelope only acknowledges metadata; it never keys RF.
+  public static string SourceForFrame(string frame){
+   if(frame==null || (frame.Length!=89 && frame.Length!=115))return null;
+   if(!System.Text.RegularExpressions.Regex.IsMatch(frame,@"\A(?:D1F00522[01]016000[ -~]{74}|D1F006C2[01]016000[ -~]{60}[0-9A-F]{40})\z"))return null;
+   string source=frame.Substring(25,10).TrimEnd(' ');
+   return System.Text.RegularExpressions.Regex.IsMatch(source,@"\A[A-Z0-9][A-Z0-9 /-]{0,9}\z")?source:null;
+  }
+ }
  public static class NodeDataEcho {
   // This is an explicitly experimental software echo, not a captured radio reply.
   public static byte[] ForFrame(string frame){

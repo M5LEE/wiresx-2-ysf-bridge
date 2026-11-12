@@ -1,5 +1,5 @@
-param([ValidateRange(60,18000)][int]$Seconds=600,[string]$Tag='voicepilot',[switch]$ForwardVoice,[ValidateSet('BridgeProtocol.dll')][string]$AssemblyName='BridgeProtocol.dll')
-# Experimental, bounded own-room bridge. Physical hardware sees M00/M10/R6423 only.
+param([ValidateRange(60,18000)][int]$Seconds=600,[string]$Tag='voicepilot',[switch]$ForwardVoice,[ValidateSet('BridgeProtocol.dll')][string]$AssemblyName='BridgeProtocol.dll',[switch]$UntilStopped)
+# Experimental current-room bridge. Physical hardware sees M00/M10/R6423 only.
 $ErrorActionPreference='Stop';$ProgressPreference='SilentlyContinue'
 if($Tag -cnotmatch '^[A-Za-z0-9]+$'){throw 'Invalid trial tag'}
 . (Join-Path $PSScriptRoot 'PublicRuntime.ps1')
@@ -22,11 +22,7 @@ $idles=@($f.Records|Where-Object {$_.Direction -eq 'HriToClient' -and $_.Body -m
 $replies=@{}
 foreach($kind in 'D1C','D1P','D1B'){$bodies=@($f.Records|Where-Object {$_.Direction -eq 'HriToClient' -and $_.Body.StartsWith($kind)}|ForEach-Object {$_.Body}|Select-Object -Unique);if($bodies.Count -ne 1){throw 'Missing consistent metadata fixture'};$replies[$kind]=$bodies[0]}
 $engine=[CumbriaCQ.Offline.VoiceEngine]::new($station.Gateway,$settings.DgId,$replies['D1C'],$idles[-1],$settings.AllowZeroDg,$true)
-if($AssemblyName -in @('BridgeProtocol.dll')){
- # Explicit experimental own-room addressing, not a measured RF-header claim.
- # Only the existing owned emulated-set ID is reused; no remote ID is invented.
- $engine=[CumbriaCQ.Offline.VoiceEngine]::new($station.Gateway,$settings.DgId,$replies['D1C'],$idles[-1],$settings.AllowZeroDg,$station.OwnRoomId,$replies['D1C'].Substring(12,5))
-}
+# Current room and emulated-radio identity are derived from native state, not configured.
 $real=New-Object IO.Ports.SerialPort $station.PhysicalPort,38400,([IO.Ports.Parity]::None),8,([IO.Ports.StopBits]::One)
 $virt=New-Object IO.Ports.SerialPort $station.AdapterPort,38400,([IO.Ports.Parity]::None),8,([IO.Ports.StopBits]::One)
 foreach($p in @($real,$virt)){$p.DtrEnable=$false;$p.RtsEnable=$false;$p.Handshake='None';$p.WriteTimeout=500}
@@ -39,9 +35,21 @@ $socket=[Net.Sockets.UdpClient]::new($address.AddressFamily);$socket.Client.Rece
 $receiveAny=if($address.AddressFamily -eq [Net.Sockets.AddressFamily]::InterNetworkV6){[Net.IPAddress]::IPv6Any}else{[Net.IPAddress]::Any}
 $poll=[Text.Encoding]::ASCII.GetBytes('YSFP'+$station.Gateway.PadRight(10));$unlink=[Text.Encoding]::ASCII.GetBytes('YSFU'+$station.Gateway.PadRight(10))
 $configured=$false;$roomVerified=$false;$linkHealthy=$false;$wasActive=$false;$nodeSaved=$false;$proofReason='not-yet-read'
-$seen=@{};$hardware=@{};$wireOut=@{};$networkOut=@{};$dropped=@{};$counts=@{Polls=0;PollReplies=0;ValidOwnRoom=0;OtherOrInvalidRoom=0;NetworkData=0;GateDrops=0;PhysicalControlsBlocked=0;Configurations=0}
+$currentRoom=$null;$connectionKey=$null;$roomBarrier=$null
+$resetGuard=[CumbriaCQ.Offline.ConfigurationResetGuard]::new()
+$seen=@{};$hardware=@{};$wireOut=@{};$networkOut=@{};$dropped=@{};$headerShapes=@{};$counts=@{Polls=0;PollReplies=0;ValidOwnRoom=0;OtherOrInvalidRoom=0;NetworkData=0;GateDrops=0;PhysicalControlsBlocked=0;Configurations=0}
 $failure=$null;$nextPoll=0;$lastAck=-1;$lastStopCheck=0;$lastProofCheck=-1000;$clock=$null;$cpuStart=0
 function Count-Key($table,$key){if(!$table.ContainsKey($key)){$table[$key]=0};$table[$key]++}
+function Write-ProgressSnapshot([string]$Path,[string]$Json){
+ $temp=$Path+'.'+[Guid]::NewGuid().ToString('N')+'.pending'
+ try{
+  [IO.File]::WriteAllText($temp,$Json,[Text.UTF8Encoding]::new($false))
+  if([IO.File]::Exists($Path)){[IO.File]::Replace($temp,$Path,[NullString]::Value)}else{[IO.File]::Move($temp,$Path)}
+  return $true
+ }catch [IO.IOException]{return $false}
+ catch [UnauthorizedAccessException]{return $false}
+ finally{if([IO.File]::Exists($temp)){try{[IO.File]::Delete($temp)}catch [IO.IOException]{}catch [UnauthorizedAccessException]{}}}
+}
 function Reply-Frame([string]$body){$virt.Write(([char]1)+$body+([char]4));$key=$body.Substring(0,[Math]::Min(3,$body.Length));Count-Key $wireOut $key}
 function Send-Batch($batch,[bool]$endingOnly=$false){
  foreach($frame in $batch.Serial){if($frame.StartsWith('P')){throw 'Physical control in software response output'};Reply-Frame $frame}
@@ -54,41 +62,56 @@ function Send-Batch($batch,[bool]$endingOnly=$false){
 try{
  if(Get-Process Wires-X -ErrorAction SilentlyContinue){throw 'Start adapter before WIRES-X'}
  $real.Open();$virt.Open();Start-Sleep -Seconds 7
- "ADAPTER_READY;EXPERIMENTAL_VOICE=True;PHYSICAL_TRANSMIT=False;OWN_ROOM_GATE=$($station.OwnRoomId)"
+ 'ADAPTER_READY;EXPERIMENTAL_VOICE=True;PHYSICAL_TRANSMIT=False;ROOM_GATE=CURRENT_NATIVE_CONNECTION'
  $clock=[Diagnostics.Stopwatch]::StartNew();$cpuStart=[Diagnostics.Process]::GetCurrentProcess().TotalProcessorTime.TotalSeconds
- while($clock.Elapsed.TotalSeconds -lt $Seconds){
+ while($UntilStopped -or $clock.Elapsed.TotalSeconds -lt $Seconds){
   $now=$clock.ElapsedMilliseconds
   if($now-$lastProofCheck -ge 1000){
-   $lastProofCheck=$now;$roomVerified=$false;$proofReason='missing-or-invalid'
+   $lastProofCheck=$now;$roomVerified=$false;$proofReason='missing-or-invalid';$nextRoom=$null;$nextKey=$null
    try{
     $proof=Get-Content (Join-Path $root ('room-proof-'+$Tag+'.json')) -Raw -ErrorAction Stop|ConvertFrom-Json
     $age=([DateTime]::UtcNow-[DateTime]::Parse($proof.Utc).ToUniversalTime()).TotalSeconds
     $app=Get-Process Wires-X -ErrorAction Stop
-    $roomVerified=($proof.Tag -ceq $Tag -and $proof.Method -ceq 'NativeMainLog' -and $proof.ControlId -eq 1014 -and $proof.AppPid -eq $app.Id -and $proof.Connected -eq $true -and $proof.RoomId -ceq $station.OwnRoomId -and $age -ge 0 -and $age -le 8 -and !$proof.Error)
+    $roomVerified=($proof.Tag -ceq $Tag -and $proof.Method -ceq 'NativeMainLog' -and $proof.ControlId -eq 1014 -and $proof.AppPid -eq $app.Id -and $proof.AppStartUtc -ceq $app.StartTime.ToUniversalTime().ToString('o') -and $proof.Connected -eq $true -and $proof.RoomId -cmatch '^[0-9]{5}$' -and $proof.RoomId -cne '00000' -and $proof.ConnectionKey -and $proof.ConnectionKey -cne $roomBarrier -and $age -ge 0 -and $age -le 8 -and !$proof.Error)
+    if($roomVerified){$nextRoom=$proof.RoomId;$nextKey=$proof.ConnectionKey}
     $proofReason=if($roomVerified){'verified'}elseif($age -gt 8 -or $age -lt 0){'stale'}elseif($proof.AppPid -ne $app.Id){'different-process'}elseif($proof.Error){'observer-error'}else{'not-connected-or-untrusted-proof'}
    }catch{}
+   if($nextKey -cne $connectionKey){
+    Send-Batch ($engine.Stop($now)) $true
+    Send-Batch ($engine.SetConnectedRoom($nextRoom,$now)) $true
+    $currentRoom=$nextRoom;$connectionKey=$nextKey
+   }
   }
   if($now -ge $nextPoll){$null=$socket.Send($poll,$poll.Length);$counts.Polls++;$nextPoll=$now+5000}
   $linkHealthy=($lastAck -ge 0 -and $now-$lastAck -le 15000)
   if($virt.BytesToRead -gt 0){
    foreach($b in $hostParser.Feed([Text.Encoding]::ASCII.GetBytes($virt.ReadExisting()))){
     $key=if($b -match '^[A-Z][0-9]{2,6}$'){$b}else{$b.Substring(0,[Math]::Min(3,$b.Length))+' length='+$b.Length};Count-Key $seen $key
+    # Command/declared length/mode only: no callsign, GPS or voice payload retained.
+    if($b -match '^D1F[0-9A-F]{12}'){Count-Key $headerShapes ($b.Substring(0,15)+' length='+$b.Length)}
     if($b -in @('M00','M10','R6423')){
      if($b -in @('M00','M10')){Send-Batch ($engine.Stop($now)) $true;$configured=$false;$roomVerified=$false}
      $real.Write(([char]1)+$b+([char]4))
     }elseif($b -eq 'D1V0000'){$virt.Write($idText);Count-Key $wireOut 'D1V'}
     elseif($configReply.ForQuery($b)){
-     $counts.Configurations++;if($counts.Configurations -gt 3){throw 'Repeated configuration resets during voice pilot'}
+     $counts.Configurations++;if(!$resetGuard.Allow($now)){throw 'Repeated configuration resets within 60 seconds'}
      $virt.Write([Text.Encoding]::ASCII.GetString($configReply.ForQuery($b)));Reply-Frame $replies['D1P'];$configured=$true
     }elseif($b -eq 'D1B00010' -and $configured){Reply-Frame $replies['D1B']}
     elseif([CumbriaCQ.Offline.NodeDataEcho]::ForFrame($b)){
-     if([CumbriaCQ.Offline.NodeRoom]::IsConnected($b,$station.OwnRoomId)){$counts.ValidOwnRoom++}else{$counts.OtherOrInvalidRoom++}
+     if($currentRoom -and [CumbriaCQ.Offline.NodeRoom]::IsConnected($b,$currentRoom)){$counts.ValidOwnRoom++}else{
+      $counts.OtherOrInvalidRoom++
+      if($currentRoom){$roomBarrier=$connectionKey;$roomVerified=$false;Send-Batch ($engine.Stop($now)) $true}
+     }
      if(!$nodeSaved){$b|ConvertTo-Json|Set-Content (Join-Path $private ('voice-node-'+$Tag+'.json'));$nodeSaved=$true}
      Send-Batch ($engine.OnClient($b,$now))
     }elseif($b -eq 'P110000'){$counts.PhysicalControlsBlocked++;Send-Batch ($engine.OnClient($b,$now))}
     elseif($b -in @('P010000','D1C0000')){
      if($configured){Send-Batch ($engine.OnClient($b,$now))}elseif($b -eq 'P010000'){Reply-Frame $idles[0]}
-    }elseif($b -eq 'P100000' -or $b.StartsWith('D1E') -or $b.StartsWith('D1F0052')){
+    }elseif($b.StartsWith('D1F0052') -or (('CumbriaCQ.Offline.TransmitMetadata' -as [type]) -and [CumbriaCQ.Offline.TransmitMetadata]::SourceForFrame($b))){
+     # Metadata ACK is radio-link flow control, not permission to forward voice.
+     # Keep it responsive even while the independent network/room gate is closed.
+     Send-Batch ($engine.OnClient($b,$now))
+    }elseif($b -eq 'P100000' -or $b.StartsWith('D1E')){
      if($configured -and $roomVerified -and $linkHealthy -and $ForwardVoice){Send-Batch ($engine.OnClient($b,$now))}
      else{$counts.GateDrops++;if($b -eq 'P100000'){Reply-Frame $idles[-1]}elseif($b.StartsWith('D1E')){try{$null=[CumbriaCQ.Offline.VoiceCodec]::ParseVoice($b);Reply-Frame 'D1E00010'}catch [ArgumentException]{Count-Key $dropped 'malformed-serial-voice'}}}
     }else{Count-Key $dropped $key}
@@ -110,7 +133,8 @@ try{
   if($active){Send-Batch ($engine.Tick($now))};$wasActive=$active
   if($now-$lastStopCheck -ge 1000){
    $lastStopCheck=$now
-   [pscustomobject]@{Tag=$Tag;Gateway=$station.Gateway;ElapsedMs=$now;Configured=$configured;OwnRoomVerified=$roomVerified;RoomProofReason=$proofReason;LinkHealthy=$linkHealthy;SerialReplies=$wireOut;NetworkSent=$networkOut;Counters=$counts;EngineCounts=$engine.DiagnosticCounts;Dropped=$dropped}|ConvertTo-Json -Depth 4 -Compress|Set-Content (Join-Path $root ('progress-'+$Tag+'.json'))
+   $snapshot=[pscustomobject]@{Tag=$Tag;Gateway=$station.Gateway;ElapsedMs=$now;Configured=$configured;OwnRoomVerified=$roomVerified;RoomProofReason=$proofReason;LinkHealthy=$linkHealthy;SerialReplies=$wireOut;NetworkSent=$networkOut;Counters=$counts;EngineCounts=$engine.DiagnosticCounts;Dropped=$dropped;HeaderShapes=$headerShapes}|ConvertTo-Json -Depth 4 -Compress
+   if(!(Write-ProgressSnapshot (Join-Path $root ('progress-'+$Tag+'.json')) $snapshot)){Count-Key $counts 'ProgressWriteFailures'}
    if(Test-Path (Join-Path $root ('stop-'+$Tag+'.flag'))){break}
   }
   Start-Sleep -Milliseconds 10
@@ -121,6 +145,6 @@ finally{
  try{$null=$socket.Send($unlink,$unlink.Length)}catch{};$socket.Close()
  foreach($p in @($real,$virt)){if($p.IsOpen){$p.Close()};$p.Dispose()}
  $cpuEnd=[Diagnostics.Process]::GetCurrentProcess().TotalProcessorTime.TotalSeconds
- $result=[pscustomobject]@{Tag=$Tag;Gateway=$station.Gateway;HostCommands=$seen;HardwareReplies=$hardware;SerialReplies=$wireOut;NetworkSent=$networkOut;Dropped=$dropped;Counters=$counts;EngineCounts=$engine.DiagnosticCounts;Configured=$configured;OwnRoomVerified=$roomVerified;RoomProofReason=$proofReason;RoomGate='NativeMainLog:1014/PID/freshness';LinkHealthy=$linkHealthy;VoiceForwardingEnabled=[bool]$ForwardVoice;ElapsedSeconds=$(if($clock){$clock.Elapsed.TotalSeconds}else{0});CpuSeconds=($cpuEnd-$cpuStart);Error=$failure;PortsReleased=$true;PhysicalPttOn=$false;VoiceRecorded=$false}
+ $result=[pscustomobject]@{Tag=$Tag;Gateway=$station.Gateway;HostCommands=$seen;HardwareReplies=$hardware;SerialReplies=$wireOut;NetworkSent=$networkOut;Dropped=$dropped;HeaderShapes=$headerShapes;Counters=$counts;EngineCounts=$engine.DiagnosticCounts;Configured=$configured;OwnRoomVerified=$roomVerified;RoomProofReason=$proofReason;RoomGate='NativeMainLog:1014/PID/freshness';LinkHealthy=$linkHealthy;VoiceForwardingEnabled=[bool]$ForwardVoice;ElapsedSeconds=$(if($clock){$clock.Elapsed.TotalSeconds}else{0});CpuSeconds=($cpuEnd-$cpuStart);Error=$failure;PortsReleased=$true;PhysicalPttOn=$false;VoiceRecorded=$false}
  $result|ConvertTo-Json -Depth 5|Set-Content (Join-Path $root ('adapter-'+$Tag+'-result.json'));$result|ConvertTo-Json -Depth 5 -Compress
 }

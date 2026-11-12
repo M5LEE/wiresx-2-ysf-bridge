@@ -16,12 +16,22 @@ static class BridgeEditorProgram {
   Application.EnableVisualStyles();Application.SetCompatibleTextRenderingDefault(false);
   string root=Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),@"M5LEE\WIRESX-to-YSF-Brtidge");Directory.CreateDirectory(root);
   try{
-   if(args.Length==1 && args[0]=="--launcher"){
+   if(args.Length==1 && (args[0]=="--launcher" || args[0]=="--autostart")){
     var principal=new System.Security.Principal.WindowsPrincipal(System.Security.Principal.WindowsIdentity.GetCurrent());
     if(!principal.IsInRole(System.Security.Principal.WindowsBuiltInRole.Administrator)){
-     Process.Start(new ProcessStartInfo(Application.ExecutablePath,"--launcher") {UseShellExecute=true,Verb="runas"});return;
+     Process.Start(new ProcessStartInfo(Application.ExecutablePath,args[0]) {UseShellExecute=true,Verb="runas"});return;
     }
-    Application.Run(new LauncherForm(AppDomain.CurrentDomain.BaseDirectory));return;
+    string identity=System.Security.Principal.WindowsIdentity.GetCurrent().User.Value;
+    string key;using(var hash=System.Security.Cryptography.SHA256.Create()){key=BitConverter.ToString(hash.ComputeHash(Encoding.UTF8.GetBytes(Application.ExecutablePath.ToUpperInvariant()))).Replace("-","").Substring(0,16);}
+    string name="Local\\M5LEE.WiresX2YSF.Launcher."+identity+"."+key;bool created;
+    using(var gate=new System.Threading.Mutex(true,name,out created))using(var signal=new System.Threading.EventWaitHandle(false,System.Threading.EventResetMode.AutoReset,name+".Show")){
+     if(!created){if(args[0]=="--launcher")signal.Set();return;}
+     try{
+      var launcher=new LauncherForm(AppDomain.CurrentDomain.BaseDirectory,args[0]=="--autostart",null,null,null);
+      var focus=new Timer {Interval=500};focus.Tick+=delegate{if(signal.WaitOne(0)){launcher.Show();launcher.WindowState=FormWindowState.Normal;launcher.Activate();}};focus.Start();
+      Application.Run(launcher);focus.Dispose();
+     }finally{gate.ReleaseMutex();}
+    }return;
    }
    if(args.Length==1 && args[0]=="--setup"){
     Process.Start(new ProcessStartInfo("powershell.exe","-NoProfile -ExecutionPolicy Bypass -File \""+Path.Combine(AppDomain.CurrentDomain.BaseDirectory,"station-setup.ps1")+"\"") {UseShellExecute=true,Verb="runas"});return;
@@ -30,7 +40,7 @@ static class BridgeEditorProgram {
     string dir=Path.GetFullPath(args[1]);Directory.CreateDirectory(dir);root=dir;
     Application.Run(new ConfigForm(root,Path.Combine(dir,"bridge-config.json"),dir));return;
    }
-   if(args.Length!=0)throw new ArgumentException("Expected no arguments, --launcher, or --smoke-test DIRECTORY");
+   if(args.Length!=0)throw new ArgumentException("Expected no arguments, --launcher, --autostart, --setup, or --smoke-test DIRECTORY");
    Application.Run(new ConfigForm(root,Path.Combine(root,"bridge-config.json"),null));
   }catch(Exception e){MessageBox.Show(e.Message,"WiresX 2 YSF Bridge",MessageBoxButtons.OK,MessageBoxIcon.Error);Environment.ExitCode=1;}
  }
@@ -57,7 +67,7 @@ sealed class ConfigForm:Form {
   list.Columns.Add("YSF ID",70);list.Columns.Add("Full room name",210);list.Columns.Add("Country",65);list.Columns.Add("Host",210);list.Columns.Add("UDP",65);list.Columns.Add("Description",250);layout.Controls.Add(list,0,3);
   selection.Dock=DockStyle.Fill;selection.Padding=new Padding(0,7,0,0);layout.Controls.Add(selection,0,4);
   var options=new FlowLayoutPanel {Dock=DockStyle.Fill,WrapContents=false};options.Controls.Add(new Label {Text="DG-ID",AutoSize=true,Margin=new Padding(0,7,8,0)});dg.Minimum=0;dg.Maximum=127;dg.Width=70;options.Controls.Add(dg);zero.Text="Accept DG-ID 0 from this reflector";zero.AutoSize=true;zero.Margin=new Padding(20,6,0,0);options.Controls.Add(zero);layout.Controls.Add(options,0,5);
-  layout.Controls.Add(new Label {Text="Saved changes apply on the NEXT bridge start. AS IS; optional donations via Help below.\r\nThis selects a YSF reflector only. Station setup selects your own WIRES-X room. Radio safety settings stay unchanged.",Dock=DockStyle.Fill,ForeColor=Color.DimGray},0,6);
+  layout.Controls.Add(new Label {Text="Saved changes apply on the NEXT bridge start. AS IS; optional donations via Help below.\r\nSelect your YSF destination here. The bridge follows the currently connected WIRES-X room.",Dock=DockStyle.Fill,ForeColor=Color.DimGray},0,6);
   var bottom=new TableLayoutPanel {Dock=DockStyle.Fill,ColumnCount=5};bottom.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,100));for(int i=0;i<4;i++)bottom.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute,116));
   status.Dock=DockStyle.Fill;status.AutoEllipsis=true;bottom.Controls.Add(status,0,0);
   var reload=new Button {Text="Station setup",Dock=DockStyle.Fill};bottom.Controls.Add(reload,1,0);var launcher=new Button {Text="Launcher...",Dock=DockStyle.Fill};bottom.Controls.Add(launcher,2,0);save.Text="Save config";save.Dock=DockStyle.Fill;bottom.Controls.Add(save,3,0);var close=new Button {Text="Close",Dock=DockStyle.Fill};bottom.Controls.Add(close,4,0);layout.Controls.Add(bottom,0,7);
@@ -114,42 +124,4 @@ sealed class ConfigForm:Form {
  }
 }
 
-sealed class LauncherForm:Form {
- readonly string root;readonly TextBox output=new TextBox();readonly Button check=new Button(),start=new Button(),stop=new Button();bool busy;
- public LauncherForm(string root){
-  Icon=System.Drawing.Icon.ExtractAssociatedIcon(Application.ExecutablePath);
-  this.root=root;Text="WiresX 2 YSF Bridge - Launcher";Font=new Font("Segoe UI",9F);StartPosition=FormStartPosition.CenterScreen;ClientSize=new Size(680,330);MinimumSize=new Size(600,300);
-  var layout=new TableLayoutPanel {Dock=DockStyle.Fill,Padding=new Padding(16),ColumnCount=1,RowCount=4};Controls.Add(layout);layout.RowStyles.Add(new RowStyle(SizeType.Absolute,35));layout.RowStyles.Add(new RowStyle(SizeType.Absolute,46));layout.RowStyles.Add(new RowStyle(SizeType.Percent,100));layout.RowStyles.Add(new RowStyle(SizeType.Absolute,42));
-  layout.Controls.Add(new Label {Text="Bridge startup and stop",Font=new Font(Font.FontFamily,14F,FontStyle.Bold),Dock=DockStyle.Fill},0,0);
-  layout.Controls.Add(new Label {Text="Start puts the adapter before WIRES-X and checks for an existing test.\r\nFive-hour alpha sessions. Keep the FTM off. Closing this window is not Stop.",Dock=DockStyle.Fill},0,1);
-  output.Multiline=true;output.ReadOnly=true;output.ScrollBars=ScrollBars.Vertical;output.Dock=DockStyle.Fill;layout.Controls.Add(output,0,2);
-  var buttons=new FlowLayoutPanel {Dock=DockStyle.Fill,FlowDirection=FlowDirection.LeftToRight};start.Text="Start bridge";start.AutoSize=true;start.Enabled=false;stop.Text="Stop launched bridge";stop.AutoSize=true;stop.Enabled=false;var config=new Button {Text="Configuration...",AutoSize=true};check.Text="Refresh status";check.AutoSize=true;buttons.Controls.AddRange(new Control[]{start,stop,config,check});layout.Controls.Add(buttons,0,3);
-  start.Click+=delegate{Action("Start");};stop.Click+=delegate{if(MessageBox.Show(this,"Stop the bridge owned by this launcher? Other test sessions will not be force-stopped.","Stop bridge",MessageBoxButtons.YesNo,MessageBoxIcon.Question)==DialogResult.Yes)Action("Stop");};config.Click+=delegate{Process.Start(new ProcessStartInfo(Application.ExecutablePath) {UseShellExecute=true});};check.Click+=delegate{CheckStatus();};Shown+=delegate{CheckStatus();};
- }
- void Action(string action){try{
-  string script=Path.Combine(root,"BridgeSupervisor.ps1");if(!File.Exists(script))throw new FileNotFoundException("Launcher backend not installed",script);
-  Process.Start(new ProcessStartInfo("powershell.exe","-NoProfile -NonInteractive -ExecutionPolicy Bypass -File \""+script+"\" -"+action) {UseShellExecute=true,Verb="runas",WindowStyle=ProcessWindowStyle.Hidden,WorkingDirectory=root});
-  output.Text="Requested "+action.ToLowerInvariant()+". Use Refresh status to verify; startup may take several minutes.";
-  start.Enabled=false;stop.Enabled=false;var timer=new Timer {Interval=3000};timer.Tick+=delegate{timer.Stop();timer.Dispose();if(!IsDisposed)CheckStatus();};timer.Start();
- }catch(Exception e){MessageBox.Show(this,e.Message,"Launcher",MessageBoxButtons.OK,MessageBoxIcon.Warning);}}
- void CheckStatus(){
-  if(busy)return;busy=true;check.Enabled=false;start.Enabled=false;stop.Enabled=false;var worker=new BackgroundWorker();
-  worker.DoWork+=delegate(object sender,DoWorkEventArgs e){
-   string script=Path.Combine(root,"BridgeSupervisor.ps1");if(!File.Exists(script)){e.Result="Launcher backend has not been installed.";return;}
-   var text=new StringBuilder();using(var p=new Process()){
-    p.StartInfo=new ProcessStartInfo("powershell.exe","-NoProfile -NonInteractive -ExecutionPolicy Bypass -File \""+script+"\" -CheckOnly") {UseShellExecute=false,CreateNoWindow=true,RedirectStandardOutput=true,RedirectStandardError=true};
-    DataReceivedEventHandler append=delegate(object source,DataReceivedEventArgs row){if(row.Data!=null)lock(text){if(text.Length<12000)text.AppendLine(row.Data);}};p.OutputDataReceived+=append;p.ErrorDataReceived+=append;p.Start();p.BeginOutputReadLine();p.BeginErrorReadLine();if(!p.WaitForExit(20000)){p.Kill();throw new TimeoutException("Status check timed out");}p.WaitForExit();e.Result=text.ToString();
-   }
-  };worker.RunWorkerCompleted+=delegate(object sender,RunWorkerCompletedEventArgs e){busy=false;if(!IsDisposed){
-   check.Enabled=true;output.Text=e.Error==null?Convert.ToString(e.Result):e.Error.Message;
-   if(e.Error==null)try{
-    string[] lines=output.Text.Trim().Split('\n');var response=new JavaScriptSerializer().DeserializeObject(lines[lines.Length-1]) as Dictionary<string,object>;
-    if(response==null || !Object.Equals(response["Event"],"Check"))throw new Exception("Status unavailable");
-    var data=(Dictionary<string,object>)response["Data"];bool existing=(bool)data["ExistingBridge"],owner=(bool)data["OwnerManifestPresent"];
-    bool setupReady=data.ContainsKey("SetupReady") && Object.Equals(data["SetupReady"],true);start.Enabled=!existing && !owner && setupReady;stop.Enabled=existing && owner;
-    string heading=existing?(owner?"Bridge present; launcher ownership record present.":"Existing test is running.\r\nStart/Stop are disabled here because this launcher does not own that session."):(owner?"Retained ownership record: inspect cleanup before another start.":(setupReady?"Ready to start. Keep the FTM off; startup may take several minutes.":"Station setup and your own validated radio profile are required before Start."));
-    output.Text=heading+"\r\n\r\n"+output.Text;
-   }catch{start.Enabled=false;stop.Enabled=false;}
-  }worker.Dispose();};worker.RunWorkerAsync();
- }
-}
+

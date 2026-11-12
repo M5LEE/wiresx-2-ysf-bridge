@@ -1,5 +1,5 @@
 [CmdletBinding()]
-param([switch]$Capture,[switch]$Start,[switch]$Stop,[switch]$CheckOnly,[switch]$SelfTest)
+param([switch]$Capture,[switch]$Start,[switch]$Stop,[switch]$CheckOnly,[switch]$SelfTest,[switch]$UntilStopped)
 $ErrorActionPreference='Stop'
 $ProgressPreference='SilentlyContinue'
 . (Join-Path $PSScriptRoot 'PublicRuntime.ps1')
@@ -109,7 +109,7 @@ function Cleanup-Real {
     Remove-Item -LiteralPath $script:Manifest
 }
 # Same orchestration for real dependencies and isolated fake dependencies.
-function Invoke-Lifecycle($ops,[int]$readyTicks=120,[int]$runTicks=72000) {
+function Invoke-Lifecycle($ops,[int]$readyTicks=120,[int]$runTicks=72000,[bool]$untilStopped=$false) {
     try {
         & $ops.Preflight
         & $ops.Prepare
@@ -125,7 +125,7 @@ function Invoke-Lifecycle($ops,[int]$readyTicks=120,[int]$runTicks=72000) {
         & $ops.Native
         if(!(& $ops.Alive)){throw 'AdapterExitedBeforeObserver'}
         & $ops.Observer
-        for($n=0;$n -lt $runTicks;$n++){
+        for($n=0;$untilStopped -or $n -lt $runTicks;$n++){
             if(& $ops.Stop){return 'StopRequested'}
             if(!(& $ops.Alive)){if($Capture){return 'CaptureComplete'};throw 'AdapterExited'}
             if(!(& $ops.Healthy)){throw 'ChildExited'}
@@ -155,6 +155,8 @@ function Run-Start {
         New-DiscoveryBackup $script:Station
         $aliases=Load-Aliases
         $script:Owner=@{Version=1;Root=$script:Root;Tag=$script:Tag;Supervisor=(Identity (Get-Process -Id $PID));Adapter=$null;Observer=$null;Native=$null;Aliases=$aliases;State='Starting'}
+        $script:Owner.RuntimeMode=if($UntilStopped){'UntilOperatorStop'}else{'Bounded'}
+        $runtimeArgs=if($UntilStopped){' -UntilStopped'}else{''}
         Save-Owner
         $script:Log=Join-Path $stateDir ($script:Tag+'.stdout')
         $ops=@{
@@ -168,7 +170,7 @@ function Run-Start {
             }
             Adapter={
                 Assert-NoAdapter
-                $p=if($Capture){Spawn-Script 'capture-startup-adapter.ps1' ('-Seconds 120 -Tag '+$script:Tag) $script:Log}else{Spawn-Script 'voice-adapter.ps1' ('-Seconds 18000 -Tag '+$script:Tag+' -ForwardVoice -AssemblyName BridgeProtocol.dll') $script:Log}
+                $p=if($Capture){Spawn-Script 'capture-startup-adapter.ps1' ('-Seconds 120 -Tag '+$script:Tag) $script:Log}else{Spawn-Script 'voice-adapter.ps1' ('-Seconds 18000 -Tag '+$script:Tag+' -ForwardVoice -AssemblyName BridgeProtocol.dll'+$runtimeArgs) $script:Log}
                 $script:Owner.Adapter=Identity $p;Save-Owner
             }
             Alive={ $null -ne (Matching $script:Owner.Adapter) }
@@ -179,7 +181,7 @@ function Run-Start {
                 try{
                     if($f.Length -gt 65536){throw 'UnexpectedAdapterOutputSize'}
                     $r=New-Object IO.StreamReader($f)
-                    try{$text=$r.ReadToEnd();if($Capture){return $text -cmatch '(?m)^ADAPTER_READY;VOICE=False;PHYSICAL_TRANSMIT=False;SAVED_CONFIG_ONLY=True\r?$'};return $text -cmatch ('(?m)^ADAPTER_READY;EXPERIMENTAL_VOICE=True;PHYSICAL_TRANSMIT=False;OWN_ROOM_GATE='+[regex]::Escape($script:Station.OwnRoomId)+'\r?$')}finally{$r.Dispose()}
+                    try{$text=$r.ReadToEnd();if($Capture){return $text -cmatch '(?m)^ADAPTER_READY;VOICE=False;PHYSICAL_TRANSMIT=False;SAVED_CONFIG_ONLY=True\r?$'};return $text -cmatch '(?m)^ADAPTER_READY;EXPERIMENTAL_VOICE=True;PHYSICAL_TRANSMIT=False;ROOM_GATE=CURRENT_NATIVE_CONNECTION\r?$'}finally{$r.Dispose()}
                 }finally{$f.Dispose()}
             }
             Native={
@@ -192,16 +194,17 @@ function Run-Start {
                 $p=Matching $script:Owner.Native
                 if(!$p){throw 'NativeExited'}
                 $argsLine='-Tag '+$script:Tag+' -Seconds 18060 -AppPid '+$p.Id+' -StartUtc "'+$script:Owner.Native.Created+'"'
+                $argsLine+=$runtimeArgs
                 $q=Spawn-Script 'observe-room-extended.ps1' $argsLine
                 $script:Owner.Observer=Identity $q;$script:Owner.State='Running';Save-Owner
-                Emit 'Running' @{Tag=$script:Tag;Settings='AppliedAtAdapterStartOnly';RuntimeSeconds=18000}
+                Emit 'Running' @{Tag=$script:Tag;Settings='AppliedAtAdapterStartOnly';RuntimeMode=$script:Owner.RuntimeMode;RuntimeSeconds=$(if($UntilStopped){$null}else{18000})}
             }
             Healthy={ ($null -ne (Matching $script:Owner.Native)) -and ($Capture -or ($null -ne (Matching $script:Owner.Observer))) }
             Stop={Test-Path -LiteralPath (Join-Path $script:Root ('stop-'+$script:Tag+'.flag'))}
             Tick={Start-Sleep -Milliseconds 250}
             Cleanup={Cleanup-Real}
         }
-        $reason=Invoke-Lifecycle $ops
+        $reason=Invoke-Lifecycle $ops -untilStopped ([bool]$UntilStopped)
         if($Capture -and $reason -ceq 'CaptureComplete'){
             $result=Get-Content (Join-Path $script:Root ('adapter-'+$script:Tag+'-result.json')) -Raw|ConvertFrom-Json
             if($result.Error -or !$result.PortsReleased){throw 'CaptureFailed'}

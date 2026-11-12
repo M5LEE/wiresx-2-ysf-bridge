@@ -8,6 +8,7 @@ try{
  New-Item -ItemType Directory $fixture|Out-Null
  Copy-Item (Join-Path $Bin 'assets') $fixture -Recurse
  Copy-Item (Join-Path $Bin 'FirstRun.ps1') $fixture
+ Copy-Item (Join-Path $Bin 'ExistingStation.ps1') $fixture
  $runtime=Get-Content (Join-Path $Bin 'PublicRuntime.ps1') -Raw
  $lines=$runtime -split '\r?\n';$lines[2]='$script:Root=Join-Path $PSScriptRoot ''fixture-data'''
  $lines -join "`r`n"|Set-Content (Join-Path $fixture 'PublicRuntime.ps1') -Encoding UTF8
@@ -15,6 +16,10 @@ try{
  if($ui.Split(@('$null=$form.ShowDialog()'),[StringSplitOptions]::None).Count -ne 2){throw 'ExpectedOneDialogEntryPoint'}
  $ui.Replace('$null=$form.ShowDialog()','')|Set-Content (Join-Path $fixture 'station-setup.ps1') -Encoding UTF8
  . (Join-Path $fixture 'station-setup.ps1')
+ Check ($panel.GetControlFromPosition(0,0).Text -ceq 'YSF bridge callsign') 'normal identity field is explicitly YSF-side only'
+ Check (!$fields.ContainsKey('OwnRoomId')) 'no native gateway or own-room field is created'
+ Check ($ysfChoose -is [Windows.Forms.Button] -and $panel.GetControlFromPosition(0,1).Text -ceq 'YSF destination room') 'normal setup exposes the YSF room chooser'
+ Check ($notes.Text -match 'WIRES-X must already be installed, configured and working' -and $notes.Text -match 'currently connected WIRES-X room') 'existing native setup prerequisite and current-room following are explained'
  Check ($portSummary.Text -notlike 'Unable to list ports*') 'Windows port enumeration succeeds without opening devices'
  Check ($panel.RowStyles[2].Height -eq 0 -and !$advanced.Checked) 'normal setup does not ask novice users for COM numbers'
  $advanced.Checked=$true
@@ -30,10 +35,12 @@ try{
  Check (($fields.PhysicalPort.Items -join ',') -ceq 'COM1,COM2,COM10') 'detected ports are valid, unique and numerically sorted'
  Check ($fields.PhysicalPort.SelectedIndex -eq -1) 'no port is guessed for a fresh station'
  $fields.PhysicalPort.SelectedItem='COM1';$fields.NativePort.SelectedItem='COM2';$fields.AdapterPort.SelectedItem='COM10'
- $fields.Gateway.Text='TEST1/WX';$fields.OwnRoomId.Text='12345'
+ $fields.Gateway.Text='TEST1/YSF'
  $null=Save-Fields
  $saved=Get-Station
  Check ($saved.PhysicalPort -ceq 'COM1' -and $saved.NativePort -ceq 'COM2' -and $saved.AdapterPort -ceq 'COM10') 'selected port values reach station persistence'
+ $saved.RadioProfileSha256='A'*64;Save-Station $saved;$fields.Gateway.Text='TEST9/YSF';$null=Save-Fields
+ Check ((Get-Station).Gateway -ceq 'TEST9/YSF' -and (Get-Station).RadioProfileSha256 -ceq ('A'*64)) 'changing YSF callsign preserves the existing radio profile'
  $hash=(Get-FileHash (Join-Path $script:Root 'station.json')).Hash
  function Get-DetectedPorts {return @('COM1','COM10','COM20')}
  $form.Show();[Windows.Forms.Application]::DoEvents();$refreshPorts.PerformClick();[Windows.Forms.Application]::DoEvents()

@@ -87,7 +87,9 @@ namespace CumbriaCQ.Offline {
   }
   public static byte[] EncodeFich(int fi,int fn,int ft,int dgId){
    if(fi<0 || fi>3 || fn<0 || fn>7 || ft<0 || ft>7 || dgId<0 || dgId>127)throw new ArgumentException("FICH field range");
-   byte[] raw={(byte)(fi<<6),(byte)((fn<<3)|ft),10,(byte)dgId,0,0};AddCrc(raw,4);
+   // Yaesu C4FM standard, table 4-1 and V/D2 section 4.2.2:
+   // CS=10 identifies the callsign data; CS=00 is reserved, not a default.
+   byte[] raw={(byte)((fi<<6)|0x20),(byte)((fn<<3)|ft),10,(byte)dgId,0,0};AddCrc(raw,4);
    int[] words={(raw[0]<<4)|(raw[1]>>4),((raw[1]&15)<<8)|raw[2],(raw[3]<<4)|(raw[4]>>4),((raw[4]&15)<<8)|raw[5]};
    byte[] convolutionInput=new byte[13];
    for(int i=0;i<4;i++){int code=Golay(words[i]);convolutionInput[i*3]=(byte)(code>>16);convolutionInput[i*3+1]=(byte)(code>>8);convolutionInput[i*3+2]=(byte)code;}

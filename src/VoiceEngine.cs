@@ -1,19 +1,35 @@
 // Copyright (c) 2026 M5LEE. MIT; see LICENSE.
 using System;
 using System.Collections.Generic;
+using System.Text;
+using System.Diagnostics;
+using System.Runtime.InteropServices;
 namespace CumbriaCQ.Offline {
+ public sealed class ConfigurationResetGuard {
+  readonly Queue<long> resets=new Queue<long>();long last=-1;
+  public bool Allow(long now){
+   if(now<0 || now<last)throw new ArgumentException("Monotonic configuration time");last=now;
+   while(resets.Count>0 && now-resets.Peek()>=60000)resets.Dequeue();
+   if(resets.Count>=3)return false;resets.Enqueue(now);return true;
+  }
+ }
  public static class RoomLog {
-  public static bool IsConnected(string text,string room){
-   if(text==null || room==null || !System.Text.RegularExpressions.Regex.IsMatch(room,@"\A[0-9]{5}\z"))return false;
-   bool connected=false;
+  public static string CurrentRoom(string text){return Connection(text)[0];}
+  public static string ConnectionKey(string text){return Connection(text)[1];}
+  static string[] Connection(string text){
+   string room=null,key=null;
+   if(text==null)return new string[]{room,key};
    foreach(string line in text.Split('\n')){
-    var row=System.Text.RegularExpressions.Regex.Match(line,@"\A[0-9]{4}/[0-9]{2}/[0-9]{2}\s+[0-9]{2}:[0-9]{2}:[0-9]{2}\s+(.+)");
-    if(!row.Success)continue;string message=row.Groups[1].Value;
-    var joined=System.Text.RegularExpressions.Regex.Match(message,@"\AConnected to .+?\(([0-9]{5})\)",System.Text.RegularExpressions.RegexOptions.IgnoreCase);
-    if(joined.Success)connected=joined.Groups[1].Value==room;
-    else if(System.Text.RegularExpressions.Regex.IsMatch(message,@"Disconnect|return to room",System.Text.RegularExpressions.RegexOptions.IgnoreCase))connected=false;
+    var row=System.Text.RegularExpressions.Regex.Match(line,@"\A([0-9]{4}/[0-9]{2}/[0-9]{2}\s+[0-9]{2}:[0-9]{2}:[0-9]{2})\s+(.+)");
+    if(!row.Success)continue;string message=row.Groups[2].Value.TrimEnd();
+    var joined=System.Text.RegularExpressions.Regex.Match(message,@"\AConnected to .+?\(([0-9]{5})\)\.?\z",System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+    if(joined.Success){room=joined.Groups[1].Value;key=row.Groups[1].Value+"|"+room;if(room=="00000"){room=null;key=null;}}
+    else if(System.Text.RegularExpressions.Regex.IsMatch(message,@"\A(?:Transceiver TX Stop\. Disconnect\.|Disconnect\b|Disconnected\b|return to room\b|Connecting(?:\(|\b))",System.Text.RegularExpressions.RegexOptions.IgnoreCase)){room=null;key=null;}
    }
-   return connected;
+   return new string[]{room,key};
+  }
+  public static bool IsConnected(string text,string room){
+   string connected=CurrentRoom(text);return connected!=null && (room==null || connected==room);
   }
  }
  public static class NodeRoom {
@@ -32,7 +48,8 @@ namespace CumbriaCQ.Offline {
  }
  public sealed class VoiceEngine {
   readonly Dictionary<string,int> diagnostics=new Dictionary<string,int>();
-  public Dictionary<string,int> DiagnosticCounts { get { return new Dictionary<string,int>(diagnostics); } }
+  public const int OutboundQueueLimit=8;
+  public Dictionary<string,int> DiagnosticCounts { get {var copy=new Dictionary<string,int>(diagnostics);copy["transmit-queue-depth"]=pending.Count;copy["transmit-queue-limit"]=OutboundQueueLimit;return copy;} }
   void Count(string reason){int value;diagnostics.TryGetValue(reason,out value);diagnostics[reason]=value+1;}
   public BridgeBatch Stop(long now){
    BridgeBatch b=new BridgeBatch();
@@ -40,14 +57,24 @@ namespace CumbriaCQ.Offline {
    if(outbound || inbound || dataTx)b.Serial.Add(Notice("00"));
    dataReady=false;dataTx=false;dataPhase=0;
    pending.Clear();received.Clear();outbound=false;inbound=false;ending=false;rxEnding=false;synced=false;metadata=null;source=null;rxSource=null;rxVia=null;
+   nativeFrames.Clear();nativeFrameOrder.Clear();
    return b;
   }
-  readonly string gateway,idle,status,receiveRoom,receiveRadioId;readonly int dgId;readonly bool allowZeroDg,measuredFtm100Receive;
+  readonly string gateway,idle,status;string receiveRoom,receiveRadioId;readonly int dgId;readonly bool allowZeroDg,measuredFtm100Receive;
+  public BridgeBatch SetConnectedRoom(string room,long now){
+   // PowerShell binds a null string argument as String.Empty: both mean disconnected.
+   if(room==String.Empty)room=null;
+   if(room!=null && (!System.Text.RegularExpressions.Regex.IsMatch(room,@"\A[0-9]{5}\z") || room=="00000"))throw new ArgumentException("Connected native room");
+   if(room==receiveRoom)return new BridgeBatch();
+   BridgeBatch stopped=Stop(now);receiveRoom=room;receiveRadioId=status.Substring(12,5);Count("room-transitions");return stopped;
+  }
   readonly Queue<byte[]> pending=new Queue<byte[]>();
   readonly Queue<byte[]> received=new Queue<byte[]>();
+  readonly Dictionary<int,string> nativeFrames=new Dictionary<int,string>();
+  readonly Queue<int> nativeFrameOrder=new Queue<int>();
   readonly Dictionary<string,long> recent=new Dictionary<string,long>();
   readonly Queue<KeyValuePair<string,long>> recentOrder=new Queue<KeyValuePair<string,long>>();
-  string metadata,source;long metadataAt,nextDue,lastVoice;bool outbound,ending;int expected,sequence,fn;
+  string metadata,source;long metadataAt,nextDue,lastVoice,lastPlayout;bool outbound,ending;int expected,sequence,fn;
   string rxSource,rxVia;bool inbound,synced,rxEnding;long rxDue,rxLast;int rxCounter,rxExpected=-1;
   long rxHeaderAt;int rxHeaderIndex;
   static readonly string[] ReceiveHeaderSlots={"11","12","21","22","31","32"};
@@ -119,6 +146,7 @@ namespace CumbriaCQ.Offline {
   }
   public BridgeBatch OnClient(string frame,long now){
    BridgeBatch b=new BridgeBatch();
+   string headerSource=TransmitMetadata.SourceForFrame(frame);
    if(frame=="P010000"){b.Serial.Add(inbound?"B1"+idle.Substring(2):idle);if(outbound)ending=true;if(dataTx && dataPhase!=4){dataPhase=4;dataRelease=now+50;b.Serial.Add(Notice("25"));}}
    else if(frame=="P110000" && (dataReady || dataTx)){
     b.Serial.Add(idle);if(!dataTx){dataTx=true;dataAt=now;dataPhase=1;b.Serial.Add(Notice("05"));}
@@ -126,29 +154,55 @@ namespace CumbriaCQ.Offline {
    else if(frame=="P100000"){b.Serial.Add(idle);if(outbound)b.Serial.Add(Notice("45"));}
    else if(frame=="D1C0000"){b.Serial.Add(Status(dataTx?(dataPhase==1?"05":dataPhase==3?"45":"25"):outbound?"45":inbound?(synced?"31":"11"):"00"));}
    else if(NodeDataEcho.ForFrame(frame)!=null){b=Stop(now);dataReady=true;dataAt=now;b.Serial.Add(frame);}
-   else if(frame!=null && System.Text.RegularExpressions.Regex.IsMatch(frame,@"\AD1F005221016000[ -~]{74}\z")){
-    string call=frame.Substring(25,10).TrimEnd(' ');
-    if(Call(call)){if(!inbound){metadata=call;metadataAt=now;}b.Serial.Add("D1F00010");}
+   else if(headerSource!=null){
+    if(!inbound){metadata=headerSource;metadataAt=now;}
+    b.Serial.Add("D1F00010");Count("transmit-header-acknowledged");
+    Count("transmit-header-acknowledged-"+(frame.Length==115?"extended":"short")+frame.Substring(7,2));
    }else if(frame!=null && frame.StartsWith("D1E")){
     Count("transmit-voice-seen");
     byte[] payload;try{payload=VoiceCodec.ParseVoice(frame);}catch(ArgumentException){Count("transmit-invalid-voice");return b;}
     b.Serial.Add("D1E00010");
+    // An arrival must not revive old buffered speech after a real scheduling stall.
+    if(outbound && now-lastVoice>400 && now-lastPlayout>400){
+     var expired=Stop(now);b.Serial.AddRange(expired.Serial);b.Network.AddRange(expired.Network);Count("transmit-stale-expired");
+    }
     if(inbound || dataReady || dataTx || ending){Count("transmit-busy");return b;}
     if(!outbound && (metadata==null || now<metadataAt || now-metadataAt>1000)){Count("transmit-missing-header");return b;}
-    if(pending.Count>=4){Count("transmit-queue-full");return b;}
+
     if(Seen("receive:"+(outbound?source:metadata)+":"+Digest(payload),now)){Count("transmit-loop");return b;}
     int counter=Convert.ToInt32(frame.Substring(8,4),16);
-    if(!outbound){source=metadata;outbound=true;expected=counter;sequence=1;fn=0;nextDue=now;Send(b,YsfWire.Packet(gateway,source,YsfWire.HeaderFrame(source,dgId,false),0,false),now);}
+    string payloadDigest=Digest(payload),seenDigest;
+    if(outbound && nativeFrames.TryGetValue(counter,out seenDigest) && seenDigest==payloadDigest){Count("transmit-duplicate");return b;}
+    if(!outbound){source=metadata;outbound=true;expected=counter;sequence=1;fn=0;nextDue=now;lastPlayout=now;Send(b,YsfWire.Packet(gateway,source,YsfWire.HeaderFrame(source,dgId,false),0,false),now);}
     // A bounded forward loss must not lock out the remainder of an over.
     // Preserve duplicate/backward/misaligned rejection; do not invent audio.
     if(counter!=expected){
      int ahead=(counter-expected)&65535;
-     if(ahead>20 || ahead%5!=0){Count("transmit-sequence-rejected");return b;}
+     if(ahead>20 || ahead%5!=0){
+      Count("transmit-sequence-rejected");Count(ahead>32768?"transmit-sequence-backward":ahead%5!=0?"transmit-sequence-misaligned":"transmit-sequence-large-forward");
+      diagnostics["transmit-last-rejected-counter"]=counter;diagnostics["transmit-last-expected-counter"]=expected;return b;
+     }
      Count("transmit-sequence-gap");for(int skipped=0;skipped<ahead;skipped+=5)Count("transmit-frames-missing");
     }
-    pending.Enqueue((byte[])payload.Clone());expected=(counter+5)&65535;lastVoice=now;Count("transmit-voice-admitted");
+    PumpOutbound(b,now);
+    // Track validated input even when bounded backpressure drops its payload.
+    // Otherwise our own overflow looks like an ever-growing upstream gap.
+    expected=(counter+5)&65535;lastVoice=now;
+    nativeFrames[counter]=payloadDigest;nativeFrameOrder.Enqueue(counter);while(nativeFrameOrder.Count>16){nativeFrames.Remove(nativeFrameOrder.Dequeue());}
+    if(pending.Count>=OutboundQueueLimit){Count("transmit-queue-full");return b;}
+    pending.Enqueue((byte[])payload.Clone());Count("transmit-voice-admitted");
+    int peak;diagnostics.TryGetValue("transmit-queue-peak",out peak);if(pending.Count>peak)diagnostics["transmit-queue-peak"]=pending.Count;
    }
    return b;
+  }
+  void PumpOutbound(BridgeBatch b,long now){
+   if(outbound && pending.Count>0 && now>=nextDue){
+    string data=fn==0?"**********":fn==1?source:(fn==2 || fn==5)?gateway:"";
+    Send(b,YsfWire.Packet(gateway,source,YsfWire.VoiceFrame(pending.Dequeue(),fn,7,dgId,data),sequence,false),now);
+    Count("transmit-voice-emitted");
+    lastPlayout=now;
+    sequence=(sequence+1)&127;fn=(fn+1)%8;nextDue+=100;if(nextDue<=now)nextDue=now+100;
+   }
   }
   public BridgeBatch Tick(long now){
    BridgeBatch b=ControlTick(now);
@@ -178,18 +232,40 @@ namespace CumbriaCQ.Offline {
     string second=slot[0]=='1'?rxSource.PadRight(10):new string(' ',10);
     b.Serial.Add("D1H001E20002000"+slot+first+second);
    }
-   if(outbound && now-lastVoice>400){pending.Clear();ending=true;}
-   if(outbound && pending.Count>0 && now>=nextDue){
-    string data=fn==0?"**********":fn==1?source:(fn==2 || fn==5)?gateway:"";
-    Send(b,YsfWire.Packet(gateway,source,YsfWire.VoiceFrame(pending.Dequeue(),fn,7,dgId,data),sequence,false),now);
-    Count("transmit-voice-emitted");
-    sequence=(sequence+1)&127;fn=(fn+1)%8;nextDue+=100;if(nextDue<=now)nextDue=now+100;
-   }
+   // Burst arrivals can be quiet while their valid buffered speech is still playing.
+   if(outbound && now-lastVoice>400 && now-lastPlayout>400){pending.Clear();ending=true;}
+   PumpOutbound(b,now);
    if(outbound && ending && pending.Count==0){
     Send(b,YsfWire.Packet(gateway,source,YsfWire.HeaderFrame(source,dgId,true),sequence,true),now);
     outbound=false;ending=false;metadata=null;source=null;b.Serial.Add(Notice("00"));
+    nativeFrames.Clear();nativeFrameOrder.Clear();
    }
    return b;
+  }
+ }
+ public sealed class NativeLogView { public string Text; public int Lines; public bool Partial; }
+ public static class NativeLogTail {
+  public delegate bool Child(IntPtr h,IntPtr p);
+  [DllImport("user32.dll")] static extern bool EnumChildWindows(IntPtr h,Child f,IntPtr p);
+  [DllImport("user32.dll")] static extern int GetDlgCtrlID(IntPtr h);
+  [DllImport("user32.dll",CharSet=CharSet.Unicode)] static extern int GetClassName(IntPtr h,StringBuilder s,int n);
+  [DllImport("user32.dll",EntryPoint="GetWindowLongW")] static extern int GetWindowLong(IntPtr h,int index);
+  [DllImport("user32.dll",CharSet=CharSet.Unicode,EntryPoint="SendMessageTimeoutW")] static extern IntPtr Send(IntPtr h,uint message,UIntPtr w,IntPtr l,uint flags,uint ms,out UIntPtr result);
+  static int Query(IntPtr h,uint message,int w,IntPtr data){UIntPtr result;if(Send(h,message,new UIntPtr((uint)w),data,2,100,out result)==IntPtr.Zero)throw new InvalidOperationException("ReadTimeout");long n=(long)result.ToUInt64();if(n<0||n>1000000)throw new InvalidOperationException("ReadRange");return (int)n;}
+  public static NativeLogView ReadNative(IntPtr main){
+   if(main==IntPtr.Zero)throw new ArgumentException("MissingWindow");IntPtr log=IntPtr.Zero;
+   EnumChildWindows(main,delegate(IntPtr h,IntPtr p){if(GetDlgCtrlID(h)==1014){var name=new StringBuilder(64);GetClassName(h,name,64);if(name.ToString()=="Edit" && (GetWindowLong(h,-16)&32)==0)log=h;}return true;},IntPtr.Zero);
+   if(log==IntPtr.Zero)throw new InvalidOperationException("DiagnosticControlUnavailable");return ReadEdit(log);
+  }
+  public static NativeLogView ReadEdit(IntPtr edit){
+   int total=Query(edit,0xBA,0,IntPtr.Zero),first=Math.Max(0,total-256);var text=new StringBuilder();var clock=Stopwatch.StartNew();var view=new NativeLogView();
+   IntPtr buffer=Marshal.AllocHGlobal(2048);
+   try{for(int line=first;line<total;line++){
+     if(clock.ElapsedMilliseconds>=1500){view.Partial=true;break;}
+     Marshal.WriteInt16(buffer,1023);int n=Query(edit,0xC4,line,buffer);if(n>1023)throw new InvalidOperationException("LineRange");
+     if(n==1023)view.Partial=true;text.Append(Marshal.PtrToStringUni(buffer,n));text.Append('\n');view.Lines++;
+    }}finally{Marshal.FreeHGlobal(buffer);}
+   view.Text=text.ToString();return view;
   }
  }
 }

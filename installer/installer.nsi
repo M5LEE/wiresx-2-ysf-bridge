@@ -4,7 +4,7 @@ Unicode True
 !include "x64.nsh"
 !include "WinVer.nsh"
 !define PRODUCT "WiresX 2 YSF Bridge"
-!define VERSION "0.1.0-alpha.5"
+!define VERSION "0.1.0-alpha.8"
 !define MUI_ICON "../assets/setup.ico"
 !define MUI_UNICON "../assets/bridge.ico"
 !define KEY "Software\Microsoft\Windows\CurrentVersion\Uninstall\M5LEE.WIRESXtoYSF"
@@ -14,20 +14,20 @@ InstallDir "$PROGRAMFILES64\M5LEE\WiresX-2-YSF-Bridge"
 RequestExecutionLevel admin
 SetCompressor /SOLID lzma
 ManifestSupportedOS all
-VIProductVersion "0.1.0.5"
+VIProductVersion "0.1.0.8"
 VIAddVersionKey /LANG=1033 "ProductName" "${PRODUCT}"
 VIAddVersionKey /LANG=1033 "ProductVersion" "${VERSION}"
-VIAddVersionKey /LANG=1033 "FileVersion" "0.1.0.5"
+VIAddVersionKey /LANG=1033 "FileVersion" "0.1.0.8"
 VIAddVersionKey /LANG=1033 "FileDescription" "Experimental alpha bridge tools installer"
 VIAddVersionKey /LANG=1033 "LegalCopyright" "Copyright (c) 2026 M5LEE"
 !define MUI_ABORTWARNING
-!define MUI_WELCOMEPAGE_TEXT "WiresX 2 YSF Bridge by M5LEE - experimental alpha.$\r$\n$\r$\nHave official WIRES-X and your genuine HRI-200 installed first. The required com0com virtual-port software, GPL licence and upstream source are included.$\r$\n$\r$\nAfter installation, guided Station setup detects WIRES-X/HRI and offers Automatic setup for the driver and virtual connection. You do not need to choose virtual COM numbers.$\r$\n$\r$\nNo bridge starts or security settings change automatically. Close this product's windows before upgrading; unrelated software is not stopped."
+!define MUI_WELCOMEPAGE_TEXT "WiresX 2 YSF Bridge by M5LEE - experimental alpha.$\r$\n$\r$\nWIRES-X must already be installed, configured and working with your account and genuine HRI-200. Set up WIRES-X first.$\r$\n$\r$\nChoose the YSF bridge callsign and destination. The bridge follows the room currently connected in WIRES-X.$\r$\n$\r$\nAlpha.8 adds tray status and optional Windows sign-in startup. Enable startup in the launcher; the bridge then launches WIRES-X itself. Windows automatic sign-in is never configured.$\r$\n$\r$\nBefore upgrading, Stop this installed bridge and Exit its tray app. Running sessions are not stopped by the installer."
 !insertmacro MUI_PAGE_WELCOME
 !insertmacro MUI_PAGE_LICENSE "../LICENSE"
 !insertmacro MUI_PAGE_COMPONENTS
 !insertmacro MUI_PAGE_DIRECTORY
 !insertmacro MUI_PAGE_INSTFILES
-!define MUI_FINISHPAGE_TEXT "Installation complete.$\r$\n$\r$\nLeave Set up my bridge selected and click Finish. Enter your callsign and WIRES-X room number, then click Automatic setup. The virtual-port dependency is included.$\r$\n$\r$\nThe wizard guides your own radio-profile capture and YSF selection. Driver compatibility is checked; Windows security is never disabled.$\r$\n$\r$\nStill experimental and AS IS. Donations to CumbriaCQ are entirely optional."
+!define MUI_FINISHPAGE_TEXT "Installation complete.$\r$\n$\r$\nSet up WIRES-X first. Check your YSF bridge callsign and destination in setup, then Open launcher.$\r$\n$\r$\nThe launcher has readable live status and a tray icon. Closing its window hides it to the tray, not Stop.$\r$\n$\r$\nOptional: tick Start bridge and WIRES-X automatically when I sign in. This backs up/disables only matching WIRES-X/YMLAN startup shortcuts. Untick to restore them. It does not start the bridge now or enable Windows automatic sign-in.$\r$\n$\r$\nExisting private station data is retained. Experimental and AS IS; donations are optional."
 !define MUI_FINISHPAGE_RUN "$INSTDIR\Bridge.exe"
 !define MUI_FINISHPAGE_RUN_PARAMETERS "--setup"
 !define MUI_FINISHPAGE_RUN_TEXT "Set up my bridge"
@@ -38,6 +38,27 @@ VIAddVersionKey /LANG=1033 "LegalCopyright" "Copyright (c) 2026 M5LEE"
 
 Section "Application (required)" Core
  SectionIn RO
+ IfFileExists "$INSTDIR\launcher-state\owner.json" destination_in_use 0
+ IfFileExists "$INSTDIR\discovery-name-backup.json" destination_in_use 0
+ Goto destination_ok
+ destination_in_use:
+  IfSilent +2
+  MessageBox MB_OK|MB_ICONSTOP "This folder contains a working bridge ownership record. Nothing was copied. Keep that folder for rollback and install to the separate default Program Files directory."
+  SetErrorLevel 6
+  Abort
+ destination_ok:
+ InitPluginsDir
+ SetOutPath "$PLUGINSDIR\BridgeGuard"
+ File "../bin/InstallerGuard.ps1"
+ File "../bin/PublicRuntime.ps1"
+ File "../bin/StartupIntegration.ps1"
+ ExecWait '"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "$PLUGINSDIR\BridgeGuard\InstallerGuard.ps1" -TargetDir "$INSTDIR" -Action Install' $0
+ ${If} $0 != 0
+  IfSilent +2
+  MessageBox MB_OK|MB_ICONSTOP "This installed bridge or one of its windows is still running. Stop the bridge, wait for cleanup, and Exit its tray/status app before upgrading. No running session was changed."
+  SetErrorLevel 7
+  Abort
+ ${EndIf}
  SetShellVarContext all
  SetRegView 64
  SetOutPath "$INSTDIR"
@@ -48,6 +69,10 @@ Section "Application (required)" Core
  File "../bin/artifact-hashes.json"
  File "../bin/PublicRuntime.ps1"
  File "../bin/FirstRun.ps1"
+ File "../bin/ExistingStation.ps1"
+ File "../bin/StartupIntegration.ps1"
+ File "../bin/BridgeStatus.ps1"
+ File "../bin/InstallerGuard.ps1"
  File "../bin/Get-BridgeSettings.ps1"
  File "../bin/BridgeSupervisor.ps1"
  File "../bin/voice-adapter.ps1"
@@ -126,6 +151,13 @@ FunctionEnd
 Section "Uninstall"
  SetShellVarContext all
  SetRegView 64
+ ExecWait '"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "$INSTDIR\InstallerGuard.ps1" -TargetDir "$INSTDIR" -Action Uninstall' $0
+ ${If} $0 != 0
+  IfSilent +2
+  MessageBox MB_OK|MB_ICONSTOP "Uninstall stopped safely. Stop the bridge and Exit its tray app first. If startup restoration is blocked, resolve its shortcut/task ownership conflict in the same Windows account before retrying. Private station data and backups were retained."
+  SetErrorLevel 7
+  Abort
+ ${EndIf}
  ClearErrors
  Delete "$INSTDIR\Bridge.exe"
  Delete "$INSTDIR\BridgeConfigCore.dll"
@@ -133,6 +165,10 @@ Section "Uninstall"
  Delete "$INSTDIR\artifact-hashes.json"
  Delete "$INSTDIR\PublicRuntime.ps1"
  Delete "$INSTDIR\FirstRun.ps1"
+ Delete "$INSTDIR\ExistingStation.ps1"
+ Delete "$INSTDIR\StartupIntegration.ps1"
+ Delete "$INSTDIR\BridgeStatus.ps1"
+ Delete "$INSTDIR\InstallerGuard.ps1"
  Delete "$INSTDIR\Get-BridgeSettings.ps1"
  Delete "$INSTDIR\BridgeSupervisor.ps1"
  Delete "$INSTDIR\voice-adapter.ps1"

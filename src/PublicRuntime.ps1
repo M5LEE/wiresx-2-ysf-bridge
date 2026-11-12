@@ -38,7 +38,9 @@ function Get-Station([switch]$RequireProfile,[object]$Candidate=$null){
  $path=Join-Path $script:Root 'station.json'
  Assert-DataPath $path
  if($null -eq $Candidate){if(!(Test-Path -LiteralPath $path)){throw 'StationSetupRequired'};$s=Get-Content -LiteralPath $path -Raw|ConvertFrom-Json}else{$s=$Candidate}
- if($s.SchemaVersion -ne 1 -or $s.Gateway -isnot [string] -or $s.Gateway -cnotmatch '^[A-Z0-9][A-Z0-9 /-]{0,9}$' -or $s.OwnRoomId -isnot [string] -or $s.OwnRoomId -cnotmatch '^[0-9]{5}$' -or $s.OwnRoomId -ceq '00000'){throw 'InvalidStationIdentity'}
+ if($s.SchemaVersion -ne 1 -or $s.Gateway -isnot [string] -or $s.Gateway -cnotmatch '^[A-Z0-9][A-Z0-9 /-]{0,9}$'){throw 'InvalidStationIdentity'}
+ # Legacy own-room values may be retained, but current-room operation does not require one.
+ if($s.OwnRoomId -and ($s.OwnRoomId -isnot [string] -or $s.OwnRoomId -cnotmatch '^[0-9]{5}$' -or $s.OwnRoomId -ceq '00000')){throw 'InvalidStationIdentity'}
  $ports=@($s.PhysicalPort,$s.NativePort,$s.AdapterPort)
  foreach($port in $ports){if($port -isnot [string] -or $port -cnotmatch '^COM[1-9][0-9]{0,3}$'){throw 'InvalidStationPort'}}
  if(@($ports|Select-Object -Unique).Count -ne 3){throw 'DistinctPortsRequired'}
@@ -82,7 +84,7 @@ function Import-OwnProfile([string]$source){
  $idle=@($records|Where-Object {$_.Direction -ceq 'HriToClient' -and $_.Body -cmatch '^B0[0-9 ]+$'})
  if(!$idle.Count){throw 'MissingIdleMetadata'}
  $s=Get-Station
- $null=[CumbriaCQ.Offline.VoiceEngine]::new($s.Gateway,0,$status,$idle[-1].Body,$false,$s.OwnRoomId,$status.Substring(12,5))
+ $null=[CumbriaCQ.Offline.VoiceEngine]::new($s.Gateway,0,$status,$idle[-1].Body,$false,$true)
  Initialize-PrivateData;$target=Join-Path $script:Root 'private-baseline\radio-profile.json'
  $pending=$target+'.pending';@{Records=$records;VoiceStored=$false;HriIdentityStored=$false}|ConvertTo-Json -Depth 6|Set-Content $pending -Encoding UTF8
  if(Test-Path $target){[IO.File]::Replace($pending,$target,$target+'.backup-'+[DateTime]::UtcNow.ToString('yyyyMMddTHHmmssfffffffZ'))}else{[IO.File]::Move($pending,$target)}

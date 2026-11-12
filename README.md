@@ -1,6 +1,6 @@
 # WiresX 2 YSF Bridge
 
-**By M5LEE · 0.1.0-alpha.5 · Experimental Windows software**
+**By M5LEE · 0.1.0-alpha.8 · Experimental Windows software**
 
 A Windows bridge connecting an existing official WIRES-X/HRI-200 station to a YSF reflector. This is a historical source snapshot; features and setup controls vary by version.
 

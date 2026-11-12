@@ -109,18 +109,20 @@ class Program {
   Check(NodeDataEcho.ForFrame(node.Substring(0,256)+"\n")==null && NodeDataEcho.ForFrame(null)==null,"node metadata echo rejects controls and null");
  }
  static void NativeFichTests(){
-  string expected="3127C2D8E4CFBE99B13E4B9D72F6464FD52F9A2784C828111C";
+  Check(BitConverter.ToString(YsfWire.EncodeFich(1,3,7,50)).Replace("-","")=="1027C2E49CFEBE99574F841D72898304552C9EA1CB082A83F7","Yaesu V/D mode2 transmits CS=10 rather than reserved CS=00 with independently encoded FEC");
+  // Independent reference encoder with Yaesu's mandatory CS=10 profile.
+  string expected="1027C2E49CFEBE99574F841D72898304552C9EA1CB082A83F7";
   Check(BitConverter.ToString(YsfWire.EncodeFich(1,3,7,50)).Replace("-","")==expected,"native DG-ID 50 FICH matches independent G4KLX reference");
   byte[] fich=new byte[25];for(int i=0;i<25;i++)fich[i]=Convert.ToByte(expected.Substring(i*2,2),16);
   int[] info=YsfWire.ReadFich(fich);
   Check(info.Length==5 && info[0]==1 && info[1]==3 && info[2]==7 && info[3]==2 && info[4]==50,"independent receive FICH validates and identifies V/D mode 2 and DG-ID");
   byte[] silence={0x7b,0xb2,0x8e,0x43,0x36,0xe4,0xa2,0x39,0x78,0x49,0x33,0x68,0x33};
   byte[] voice=new byte[65];for(int i=0;i<5;i++)Array.Copy(silence,0,voice,i*13,13);
-  string frame="D471C9634D30D7C2A91FC3AE99115641ED716E644CD52E79B58A08297A07C3F88EF9457BB28E4336E4A23978493368339A6B871AD37BB28E4336E4A2397849336833107BC8FCC67BB28E4336E4A239784933683339A00250FA7BB28E4336E4A2397849336833F7CC02BD3F7BB28E4336E4A2397849336833";
+  string frame="D471C9634D11D7C29567F2AE99F7278E6D7111A107552D7D33C5C82BE8ECC3F88EF9457BB28E4336E4A23978493368339A6B871AD37BB28E4336E4A2397849336833107BC8FCC67BB28E4336E4A239784933683339A00250FA7BB28E4336E4A2397849336833F7CC02BD3F7BB28E4336E4A2397849336833";
   Check(BitConverter.ToString(YsfWire.VoiceFrame(voice,1,7,50,"M0YSF/BRG ")).Replace("-","")==frame,"complete YSF communications frame matches independent reference");
-  string header="D471C9634D0037BAD1C3002D961320003FE3FA000025DE8368000B8ADB18F3F8F86D5853118D9DDF2363C017607F1C88EEA5E07FC3E426FFBAB9A85ABA46921014BE08A52CD3420EDF9C7575A8F77FB81110F2C643D18C3EE89C85DC8F3DEF0E84251E49946425BF00F0570E21E33C1373F60DFBD5890193";
+  string header="D471C9634D2137BAEDBB312D96F551CFBFE385C54BA5DD87EE4FCB8849F3F3F8F86D5853118D9DDF2363C017607F1C88EEA5E07FC3E426FFBAB9A85ABA46921014BE08A52CD3420EDF9C7575A8F77FB81110F2C643D18C3EE89C85DC8F3DEF0E84251E49946425BF00F0570E21E33C1373F60DFBD5890193";
   Check(BitConverter.ToString(YsfWire.HeaderFrame("M0YSF/BRG",50,false)).Replace("-","")==header,"complete YSF header matches independent reference");
-  string terminator="D471C9634DC397BA0D3C41CD9523BB4C0FE18C298A65DE0223C3CB8A76E8F3F8F86D5853118D9DDF2363C017607F1C88EEA5E07FC3E426FFBAB9A85ABA46921014BE08A52CD3420EDF9C7575A8F77FB81110F2C643D18C3EE89C85DC8F3DEF0E84251E49946425BF00F0570E21E33C1373F60DFBD5890193";
+  string terminator="D471C9634DE297BA314470CD95C5CA838FE1F3ECC1E5DD06A58C0B88E403F3F8F86D5853118D9DDF2363C017607F1C88EEA5E07FC3E426FFBAB9A85ABA46921014BE08A52CD3420EDF9C7575A8F77FB81110F2C643D18C3EE89C85DC8F3DEF0E84251E49946425BF00F0570E21E33C1373F60DFBD5890193";
   Check(BitConverter.ToString(YsfWire.HeaderFrame("M0YSF/BRG",50,true)).Replace("-","")==terminator,"complete YSF terminator matches independent reference");
   byte[] radio=YsfWire.VoiceFrame(voice,1,7,50,"M0YSF/BRG ");
   byte[] packet=YsfWire.Packet("M5LEE/WX","M0YSF/BRG",radio,127,true);
@@ -145,6 +147,11 @@ class Program {
  }
  static string VoiceHeader(string source){return "D1F005221016000"+"*****     "+source.PadRight(10)+new string(' ',40)+"09"+new string('0',12);}
  static void RoomGateTests(){
+  var guardType=typeof(VoiceEngine).Assembly.GetType("CumbriaCQ.Offline.ConfigurationResetGuard");
+  Check(guardType!=null,"configuration reset safeguard is a bounded burst detector rather than a lifetime room-switch limit");
+  var guard=Activator.CreateInstance(guardType);var allow=guardType.GetMethod("Allow");
+  Check((bool)allow.Invoke(guard,new object[]{0L}) && (bool)allow.Invoke(guard,new object[]{1000L}) && (bool)allow.Invoke(guard,new object[]{2000L}) && !(bool)allow.Invoke(guard,new object[]{3000L}),"four configuration resets inside a minute still fail safely");
+  Check((bool)allow.Invoke(guard,new object[]{61000L}) && (bool)allow.Invoke(guard,new object[]{122000L}) && (bool)allow.Invoke(guard,new object[]{183000L}),"normal later reconfigurations do not accumulate towards a lifetime shutdown");
   var dataEngine=new VoiceEngine("TEST1/WX",50,"D1C000B00000TEST10","B0 0    0000000",true);
   dataEngine.OnClient("D1F00FA20011000"+new string(' ',242),0);
   var keyData=dataEngine.OnClient("P110000",1);
@@ -155,6 +162,25 @@ class Program {
   Check(dataEngine.Tick(211).Serial.Contains("D1P000B00000TEST10"),"software node data unkeys back to idle");
   string log="2026/11/05 23:20:00 Connected to CUMBRIA-CQ(12345).\r\n2026/11/05 23:20:01 Member not message.\r\n";
   Check(RoomLog.IsConnected(log,"12345"),"native diagnostic-log gate recognises an explicit own-room connection");
+  Check(RoomLog.IsConnected(log+"2026/11/05 23:20:03 Connected to OTHER(28054).\r\n",null),"automatic room tracking accepts the currently connected room without a configured own-room ID");
+  Check(RoomLog.CurrentRoom(log+"2026/11/05 23:20:03 Connected to OTHER(28054).\r\n")=="28054","room observer derives latest room from the existing WIRES-X connection");
+  Check(RoomLog.CurrentRoom(log+"2026/11/05 23:20:04 Connecting(IPv4)\r\n")==null,"room switching revokes the old connection while native reconnects");
+  Check(RoomLog.ConnectionKey(log)!=RoomLog.ConnectionKey(log+"2026/11/05 23:20:04 Connected to CUMBRIA-CQ(12345).\r\n"),"rejoining the same room produces a new connection boundary");
+  var changeMethod=typeof(VoiceEngine).GetMethod("SetConnectedRoom");
+  Check(changeMethod!=null,"engine exposes an explicit room-transition boundary instead of a fixed-room constructor");
+  var changing=new VoiceEngine("TESTGW/WX",50,"D1C000B00005TEST10","B0 0    0000000",false,true);
+  changeMethod.Invoke(changing,new object[]{"12345",0L});
+  changing.OnReflector(YsfWire.Packet("TESTVIA","TESTCALL",YsfWire.HeaderFrame("TESTCALL",50,false),0,false),1);
+  changing.OnReflector(YsfWire.Packet("TESTVIA","TESTCALL",YsfWire.VoiceFrame(new byte[65],0,7,50,"TESTCALL"),1,false),20);
+  changeMethod.Invoke(changing,new object[]{"54321",50L});
+  Check(!changing.Tick(101).Serial.Exists(delegate(string f){return f.StartsWith("D1R") || f.StartsWith("D1H");}),"switching room discards queued incoming speech and old headers");
+  changing.OnReflector(YsfWire.Packet("TESTVIA","NEXTCALL",YsfWire.HeaderFrame("NEXTCALL",50,false),0,false),200);
+  Check(changing.Tick(300).Serial.Contains("D1H001E210020001054321TEST1NEXTCALL  "),"next stream targets newly observed room using existing emulated-radio identity");
+  changeMethod.Invoke(changing,new object[]{null,301L});
+  changing.OnClient(VoiceHeader("TESTCALL"),400);changing.OnClient(VoiceCodec.SerialVoice("D1E",0,new byte[65]),400);
+  var roomEnd=(BridgeBatch)changeMethod.Invoke(changing,new object[]{"12345",401L});
+  Check(roomEnd.Network.Count==1 && (roomEnd.Network[0][34]&1)==1 && changing.Tick(402).Network.Count==0,"room switch terminates outgoing stream without leaking queued old-room speech");
+  Check(changing.OnClient(VoiceCodec.SerialVoice("D1E",5,new byte[65]),403).Network.Count==0,"new room requires fresh native transmit metadata");
   Check(!RoomLog.IsConnected(log+"2026/11/05 23:20:02 Transceiver TX Stop. Disconnect.\r\n","12345"),"native log gate revokes forwarding immediately on disconnect");
   Check(!RoomLog.IsConnected(log+"2026/11/05 23:20:03 Connected to OTHER(28054).\r\n","12345"),"native log gate cannot admit another room");
   Check(!RoomLog.IsConnected("Connected to CUMBRIA-CQ(12345).","12345"),"unstructured chat-like text cannot establish room ownership");
@@ -166,6 +192,35 @@ class Program {
   Check(!NodeRoom.IsConnected(frame.Substring(0,256)+(frame[256]=='0'?"1":"0"),"12345"),"corrupted node identification cannot open live forwarding gate");
  }
  static void EngineOutboundTests(){
+  var longHeaderEngine=new VoiceEngine("TESTGW/WX",50,"D1C000B00000TEST10","B0 0    0000000",false);
+  string switchedHeader=VoiceHeader("TESTCALL").Replace("D1F005221016000","D1F005220016000");
+  Check(longHeaderEngine.OnClient(switchedHeader,0).Serial.Contains("D1F00010"),"observed 20-mode short metadata is acknowledged after a room change");
+  Check(TransmitMetadata.SourceForFrame(switchedHeader)=="TESTCALL","20-mode metadata derives source from native client without separate identity configuration");
+  Check(longHeaderEngine.OnClient(switchedHeader,0).Network.Count==0,"20-mode metadata acknowledgement does not itself transmit voice");
+  Check(longHeaderEngine.OnClient(switchedHeader.Replace("20016000","22016000"),0).Serial.Count==0,"unobserved 22-mode metadata remains fail closed");
+  string longHeader="D1F006C21016000"+"*****     "+"TESTCALL  "+new string(' ',40)+new string('0',40);
+  string long20Header=longHeader.Replace("D1F006C21016000","D1F006C20016000");
+  Check(longHeaderEngine.OnClient(long20Header,0).Serial.Contains("D1F00010"),"observed extended 20-mode metadata receives its mandatory acknowledgement");
+  Check(longHeaderEngine.DiagnosticCounts.ContainsKey("transmit-header-acknowledged-extended20") && longHeaderEngine.DiagnosticCounts["transmit-header-acknowledged-extended20"]==1,"safe mode-specific counter proves extended 20-mode acknowledgements without caller payload logging");
+  Check(TransmitMetadata.SourceForFrame(long20Header)=="TESTCALL","extended 20-mode metadata retains the validated native source offset");
+  Check(longHeaderEngine.OnClient(long20Header,0).Network.Count==0,"extended 20-mode acknowledgement emits no voice");
+  Check(longHeaderEngine.OnClient(long20Header.Replace("20016000","22016000"),0).Serial.Count==0,"unobserved extended 22-mode metadata remains closed");
+  Check(longHeaderEngine.OnClient(long20Header.Substring(0,114),0).Serial.Count==0 && longHeaderEngine.OnClient(long20Header+"0",0).Serial.Count==0,"extended 20-mode rejects wrong actual lengths");
+  Check(longHeaderEngine.OnClient(long20Header.Substring(0,114)+"Z",0).Serial.Count==0,"extended 20-mode preserves hex suffix validation");
+  Check(longHeaderEngine.OnClient("D1F0052"+long20Header.Substring(7),0).Serial.Count==0,"extended 20-mode rejects false declared length");
+  Check(TransmitMetadata.SourceForFrame(long20Header.Substring(0,25)+new string(' ',10)+long20Header.Substring(35))==null,"extended 20-mode rejects blank native sources");
+  Check(TransmitMetadata.SourceForFrame(long20Header.Substring(0,40)+"\n"+long20Header.Substring(41))==null,"extended 20-mode rejects control characters");
+  Check(longHeaderEngine.OnClient(longHeader,0).Serial.Contains("D1F00010"),"extended transmit metadata receives its mandatory short acknowledgement instead of triggering a transceiver frame timeout");
+  Check(TransmitMetadata.SourceForFrame(longHeader)=="TESTCALL" && TransmitMetadata.SourceForFrame(VoiceHeader("TESTCALL"))=="TESTCALL","short and extended metadata preserve the same validated source field");
+  Check(longHeaderEngine.OnClient(longHeader,1).Network.Count==0,"metadata acknowledgement alone never starts network voice or physical transmission");
+  Check(longHeaderEngine.OnClient(longHeader.Substring(0,114),2).Serial.Count==0 && longHeaderEngine.OnClient(longHeader+"0",2).Serial.Count==0,"truncated and oversized extended metadata are not acknowledged");
+  Check(longHeaderEngine.OnClient(longHeader.Substring(0,114)+"Z",2).Serial.Count==0,"extended metadata rejects a non-hex position slot");
+  Check(longHeaderEngine.OnClient("D1F0052"+longHeader.Substring(7),2).Serial.Count==0,"extended metadata cannot lie about its declared length");
+  Check(longHeaderEngine.OnClient("D1F006C21006000"+longHeader.Substring(15),2).Serial.Count==0,"unsupported transmit mode is not blindly acknowledged");
+  Check(longHeaderEngine.OnClient("D1G"+longHeader.Substring(3),2).Serial.Count==0,"receive metadata cannot masquerade as a native transmit request");
+  Check(TransmitMetadata.SourceForFrame(longHeader.Substring(0,25)+new string(' ',10)+longHeader.Substring(35))==null,"blank source metadata cannot arm an outbound stream");
+  Check(TransmitMetadata.SourceForFrame(longHeader.Substring(0,40)+"\n"+longHeader.Substring(41))==null,"metadata control characters are rejected before acknowledgement");
+  Check(longHeaderEngine.OnClient(VoiceCodec.SerialVoice("D1E",0,new byte[65]),10).Network.Count==1,"valid extended metadata arms the existing paced outbound voice path");
   var gap=new VoiceEngine("TEST1/WX",50,"D1C000B00000TEST10","B0 0    0000000",false);
   byte[] tail=new byte[65];for(int i=0;i<tail.Length;i++)tail[i]=0x23;
   gap.OnClient(VoiceHeader("TESTCALL"),0);gap.OnClient(VoiceCodec.SerialVoice("D1E",0,new byte[65]),0);gap.Tick(0);
@@ -173,16 +228,61 @@ class Program {
   var recovered=gap.Tick(200);
   Check(recovered.Network.Count==1 && BitConverter.ToString(YsfWire.ReceiveVoice(recovered.Network[0],50,false))==BitConverter.ToString(tail),"one missing native voice frame cannot suppress the remaining valid over");
   gap.OnClient(VoiceCodec.SerialVoice("D1E",10,tail),210);Check(gap.Tick(210).Network.Count==0,"recovered outbound stream still refuses a duplicate counter");
+  Check(gap.DiagnosticCounts.ContainsKey("transmit-duplicate") && gap.DiagnosticCounts["transmit-duplicate"]==1,"an exact repeated native frame is identified as a duplicate rather than claimed as lost speech");
   gap.OnClient(VoiceCodec.SerialVoice("D1E",16,tail),220);Check(gap.Tick(220).Network.Count==0,"misaligned native voice counters are not accepted as loss recovery");
   gap.OnClient(VoiceCodec.SerialVoice("D1E",15,tail),300);Check(gap.Tick(300).Network.Count==1,"invalid counters cannot poison the next correctly sequenced voice frame");
   var quality=gap.DiagnosticCounts;
-  Check(quality.ContainsKey("transmit-voice-seen") && quality["transmit-voice-seen"]==5 && quality["transmit-voice-admitted"]==3 && quality["transmit-voice-emitted"]==3 && quality["transmit-sequence-rejected"]==2 && quality["transmit-sequence-gap"]==1 && quality["transmit-frames-missing"]==1,"outbound quality counters distinguish admitted emitted rejected and missing frames without retaining voice");
+  Check(quality.ContainsKey("transmit-voice-seen") && quality["transmit-voice-seen"]==5 && quality["transmit-voice-admitted"]==3 && quality["transmit-voice-emitted"]==3 && quality["transmit-sequence-rejected"]==1 && quality["transmit-duplicate"]==1 && quality["transmit-sequence-gap"]==1 && quality["transmit-frames-missing"]==1,"outbound quality counters distinguish admitted emitted duplicate rejected and missing frames without retaining voice");
   var burst=new VoiceEngine("TEST1/WX",50,"D1C000B00000TEST10","B0 0    0000000",false);burst.OnClient(VoiceHeader("BURST"),0);
-  for(int i=0;i<5;i++)burst.OnClient(VoiceCodec.SerialVoice("D1E",i*5,new byte[65]),0);
-  for(int i=0;i<4;i++)burst.Tick(i*100);
-  burst.OnClient(VoiceCodec.SerialVoice("D1E",25,tail),400);var burstTail=burst.Tick(400);
-  Check(burstTail.Network.Count==1 && BitConverter.ToString(YsfWire.ReceiveVoice(burstTail.Network[0],50,false))==BitConverter.ToString(tail),"bounded queue overflow cannot permanently suppress a later valid voice tail");
-  Check(burst.DiagnosticCounts["transmit-queue-full"]==1 && burst.DiagnosticCounts["transmit-frames-missing"]==1,"queue overflow and its counter gap are visible instead of silently discarded");
+  var boundedBurst=new VoiceEngine("TESTGW/WX",50,"D1C000B00000TEST10","B0 0    0000000",false);boundedBurst.OnClient(VoiceHeader("TESTCALL"),0);
+  var boundedPackets=new List<byte[]>();
+  for(int i=0;i<8;i++){byte[] sample=new byte[65];sample[0]=(byte)i;boundedPackets.AddRange(boundedBurst.OnClient(VoiceCodec.SerialVoice("D1E",i*5,sample),0).Network);}
+  Check(boundedBurst.DiagnosticCounts["transmit-voice-admitted"]==8 && !boundedBurst.DiagnosticCounts.ContainsKey("transmit-queue-full"),"bounded jitter budget absorbs eight-frame native bursts instead of dropping their tail");
+  for(int t=0;t<=700;t+=100)boundedPackets.AddRange(boundedBurst.Tick(t).Network);
+  var boundedVoice=boundedPackets.FindAll(delegate(byte[] p){byte[] f=new byte[25];Array.Copy(p,40,f,0,25);return YsfWire.ReadFich(f)[0]==1;});
+  bool boundedExact=boundedVoice.Count==8;for(int i=0;i<boundedVoice.Count;i++)boundedExact &= YsfWire.ReceiveVoice(boundedVoice[i],50,false)[0]==i;
+  Check(boundedExact,"larger bounded burst drains in order at normal pace without changing voice data");
+  var fair=new VoiceEngine("TESTGW/WX",50,"D1C000B00000TEST10","B0 0    0000000",false);fair.OnClient(VoiceHeader("TESTCALL"),0);
+  var fairPackets=new List<byte[]>();
+  for(int i=0;i<5;i++){byte[] sample=new byte[65];sample[0]=(byte)i;fairPackets.AddRange(fair.OnClient(VoiceCodec.SerialVoice("D1E",i*5,sample),0).Network);}
+  Check(fair.DiagnosticCounts["transmit-voice-admitted"]==5 && !fair.DiagnosticCounts.ContainsKey("transmit-queue-full"),"due voice is serviced during serial ingress so five coalesced frames do not overflow a four-frame queue");
+  for(int t=0;t<=400;t+=100)fairPackets.AddRange(fair.Tick(t).Network);
+  var fairVoices=fairPackets.FindAll(delegate(byte[] p){byte[] f=new byte[25];Array.Copy(p,40,f,0,25);return YsfWire.ReadFich(f)[0]==1;});
+  bool fairExact=fairVoices.Count==5;for(int i=0;i<fairVoices.Count;i++)fairExact &= YsfWire.ReceiveVoice(fairVoices[i],50,false)[0]==i;
+  Check(fairExact,"coalesced burst is forwarded byte-exactly once in original order without a catch-up flood");
+  var saturated=new VoiceEngine("TESTGW/WX",50,"D1C000B00000TEST10","B0 0    0000000",false);saturated.OnClient(VoiceHeader("TESTCALL"),0);
+  for(int i=0;i<12;i++)saturated.OnClient(VoiceCodec.SerialVoice("D1E",i*5,new byte[65]),0);
+  for(int t=0;t<=800;t+=100)saturated.Tick(t);
+  saturated.OnClient(VoiceCodec.SerialVoice("D1E",60,tail),800);var resumed=saturated.Tick(900);
+  var resumedVoice=resumed.Network.FindAll(delegate(byte[] p){byte[] f=new byte[25];Array.Copy(p,40,f,0,25);return YsfWire.ReadFich(f)[0]==1;});
+  Check(resumedVoice.Count==1 && BitConverter.ToString(YsfWire.ReceiveVoice(resumedVoice[0],50,false))==BitConverter.ToString(tail),"known local overflow cannot poison the ingress counter and reject the rest of the over");
+  Check(saturated.DiagnosticCounts["transmit-queue-full"]==3 && !saturated.DiagnosticCounts.ContainsKey("transmit-sequence-rejected") && saturated.DiagnosticCounts["transmit-queue-peak"]==8,"bounded overflow keeps an eight-frame hard limit without a secondary sequence-rejection cascade");
+  var grouped=new VoiceEngine("TESTGW/WX",50,"D1C000B00000TEST10","B0 0    0000000",false);grouped.OnClient(VoiceHeader("TESTCALL"),0);
+  var groupedPackets=new List<byte[]>();
+  for(int t=0;t<=2900;t+=10){
+   if(t%500==0 && t<=2500)for(int i=0;i<5;i++){int n=t/100+i;byte[] sample=new byte[65];sample[0]=(byte)n;groupedPackets.AddRange(grouped.OnClient(VoiceCodec.SerialVoice("D1E",n*5,sample),t).Network);}
+   groupedPackets.AddRange(grouped.Tick(t).Network);
+  }
+  var groupedVoice=groupedPackets.FindAll(delegate(byte[] p){byte[] f=new byte[25];Array.Copy(p,40,f,0,25);return YsfWire.ReadFich(f)[0]==1;});
+  Check(grouped.DiagnosticCounts["transmit-voice-admitted"]==30 && groupedVoice.Count==30,"normal half-second input bursts remain one uninterrupted over rather than expiring between batches");
+  bool groupedExact=true;for(int i=0;i<groupedVoice.Count;i++)groupedExact &= YsfWire.ReceiveVoice(groupedVoice[i],50,false)[0]==i;
+  Check(groupedExact && !grouped.DiagnosticCounts.ContainsKey("transmit-queue-full"),"sustained five-frame bursts preserve every payload in order without increasing buffer capacity");
+  var stalled=new VoiceEngine("TESTGW/WX",50,"D1C000B00000TEST10","B0 0    0000000",false);stalled.OnClient(VoiceHeader("TESTCALL"),0);
+  stalled.OnClient(VoiceCodec.SerialVoice("D1E",0,new byte[65]),0);stalled.OnClient(VoiceCodec.SerialVoice("D1E",5,tail),0);
+  var stalledArrival=stalled.OnClient(VoiceCodec.SerialVoice("D1E",10,new byte[65]),2000);
+  Check(!stalledArrival.Network.Exists(delegate(byte[] p){byte[] f=new byte[25];Array.Copy(p,40,f,0,25);return YsfWire.ReadFich(f)[0]==1;}),"a new arrival after a hard scheduler stall cannot replay stale buffered speech");
+  Check(stalledArrival.Network.Count==1 && (stalledArrival.Network[0][34]&1)==1 && stalled.Tick(2001).Network.Count==0,"hard-stall expiry terminates once and requires fresh metadata without a catch-up burst");
+  var overflowWrap=new VoiceEngine("TESTGW/WX",50,"D1C000B00000TEST10","B0 0    0000000",false);overflowWrap.OnClient(VoiceHeader("TESTCALL"),0);
+  for(int i=0;i<12;i++)overflowWrap.OnClient(VoiceCodec.SerialVoice("D1E",(65520+i*5)&65535,new byte[65]),0);
+  for(int t=0;t<=800;t+=100)overflowWrap.Tick(t);
+  Check(overflowWrap.OnClient(VoiceCodec.SerialVoice("D1E",(65520+55)&65535,tail),800).Network.Count==0,"conflicting repeated native counter remains rejected after overflow across counter wrap");
+  overflowWrap.OnClient(VoiceCodec.SerialVoice("D1E",(65520+60)&65535,tail),800);
+  Check(overflowWrap.Tick(900).Network.Count==1,"bounded overflow recovery survives native counter wrap without widening forward-gap admission");
+  for(int i=0;i<10;i++)burst.OnClient(VoiceCodec.SerialVoice("D1E",i*5,new byte[65]),0);
+  for(int t=0;t<=800;t+=100)burst.Tick(t);
+  var burstTail=burst.OnClient(VoiceCodec.SerialVoice("D1E",50,tail),800);burstTail.Network.AddRange(burst.Tick(800).Network);burstTail.Network.AddRange(burst.Tick(900).Network);
+  Check(burstTail.Network.Count>0 && BitConverter.ToString(YsfWire.ReceiveVoice(burstTail.Network[burstTail.Network.Count-1],50,false))==BitConverter.ToString(tail),"bounded queue overflow cannot permanently suppress a later valid voice tail");
+  Check(burst.DiagnosticCounts["transmit-queue-full"]==1 && !burst.DiagnosticCounts.ContainsKey("transmit-frames-missing"),"known queue overflow is counted once rather than also being reported as upstream packet loss");
   var wrapGap=new VoiceEngine("TEST1/WX",50,"D1C000B00000TEST10","B0 0    0000000",false);wrapGap.OnClient(VoiceHeader("WRAP"),0);wrapGap.OnClient(VoiceCodec.SerialVoice("D1E",65530,new byte[65]),0);wrapGap.Tick(0);
   wrapGap.OnClient(VoiceCodec.SerialVoice("D1E",4,tail),200);Check(wrapGap.Tick(200).Network.Count==1,"small forward loss recovery survives the sixteen-bit native counter wrap");
   VoiceEngine e=new VoiceEngine("M5LEE/WX",50,"D1C000B00000TEST10","B0 0    0000000",false);

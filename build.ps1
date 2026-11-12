@@ -12,9 +12,9 @@ foreach($f in Get-ChildItem $src -Filter '*.ps1'){
 if($LASTEXITCODE){throw 'Configuration SDK compilation failed'}
 & $csc /nologo /warnaserror+ /target:library ("/out:"+(Join-Path $bin 'BridgeProtocol.dll')) (Join-Path $src 'OfflineCore.cs') (Join-Path $src 'YsfWire.cs') (Join-Path $src 'VoiceEngine.cs')
 if($LASTEXITCODE){throw 'Protocol SDK compilation failed'}
-& $csc /nologo /warnaserror+ /target:winexe /r:System.Windows.Forms.dll /r:System.Drawing.dll /r:System.Web.Extensions.dll ("/win32icon:"+(Join-Path $root 'assets\bridge.ico')) ("/r:"+(Join-Path $bin 'BridgeConfigCore.dll')) ("/out:"+(Join-Path $bin 'Bridge.exe')) (Join-Path $src 'BridgeConfigEditor.cs') (Join-Path $src 'AssemblyInfo.cs')
+& $csc /nologo /warnaserror+ /target:winexe /r:System.Windows.Forms.dll /r:System.Drawing.dll /r:System.Web.Extensions.dll ("/win32icon:"+(Join-Path $root 'assets\bridge.ico')) ("/r:"+(Join-Path $bin 'BridgeConfigCore.dll')) ("/out:"+(Join-Path $bin 'Bridge.exe')) (Join-Path $src 'BridgeConfigEditor.cs') (Join-Path $src 'LauncherForm.cs') (Join-Path $src 'AssemblyInfo.cs')
 if($LASTEXITCODE){throw 'Application compilation failed'}
-$scripts=@('PublicRuntime.ps1','FirstRun.ps1','Get-BridgeSettings.ps1','BridgeSupervisor.ps1','voice-adapter.ps1','observe-room-extended.ps1','capture-startup-adapter.ps1','station-setup.ps1')
+$scripts=@('PublicRuntime.ps1','FirstRun.ps1','ExistingStation.ps1','StartupIntegration.ps1','BridgeStatus.ps1','InstallerGuard.ps1','Get-BridgeSettings.ps1','BridgeSupervisor.ps1','voice-adapter.ps1','observe-room-extended.ps1','capture-startup-adapter.ps1','station-setup.ps1')
 foreach($name in $scripts){Copy-Item -LiteralPath (Join-Path $src $name) -Destination (Join-Path $bin $name) -Force}
 New-Item -ItemType Directory -Force (Join-Path $bin 'assets')|Out-Null
 foreach($name in @('bridge.ico','settings.ico','setup.ico')){Copy-Item -LiteralPath (Join-Path $root ('assets\'+$name)) -Destination (Join-Path $bin ('assets\'+$name)) -Force}
@@ -34,5 +34,17 @@ if(!$SkipTests){
  if($LASTEXITCODE){throw 'Station port-selector tests failed'}
  & powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File (Join-Path $root 'tests\FirstRunTests.ps1') -Bin $bin
  if($LASTEXITCODE){throw 'First-run setup tests failed'}
+ & powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File (Join-Path $root 'tests\MigrationTests.ps1') -Bin $bin
+ if($LASTEXITCODE){throw 'Existing-station migration tests failed'}
+ & powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File (Join-Path $root 'tests\StartupTests.ps1') -Bin $bin
+ if($LASTEXITCODE){throw 'Sign-in startup tests failed'}
+ & powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File (Join-Path $root 'tests\StatusTests.ps1') -Bin $bin
+ if($LASTEXITCODE){throw 'Readable status tests failed'}
+ & powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File (Join-Path $root 'tests\InstallerGuardTests.ps1') -Bin $bin
+ if($LASTEXITCODE){throw 'Active-installation protection tests failed'}
+ & $csc /nologo /warnaserror+ /r:System.Windows.Forms.dll /r:System.Drawing.dll /r:System.Web.Extensions.dll ("/out:"+(Join-Path $tests 'LauncherUiTests.exe')) (Join-Path $root 'tests\LauncherUiTests.cs')
+ if($LASTEXITCODE){throw 'Launcher UI test build failed'}
+ & (Join-Path $tests 'LauncherUiTests.exe') $bin (Join-Path $root 'tests\launcher-ui')
+ if($LASTEXITCODE){throw 'Launcher tray/autostart UI tests failed'}
 }
 Write-Output ('BUILD_OK '+$bin)
