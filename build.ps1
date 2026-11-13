@@ -1,6 +1,7 @@
 [CmdletBinding()]param([switch]$SkipTests)
 $ErrorActionPreference='Stop';$ProgressPreference='SilentlyContinue'
 $root=$PSScriptRoot;$src=Join-Path $root 'src';$bin=Join-Path $root 'bin';$tests=Join-Path $root 'tests\bin'
+& (Join-Path $root 'tools\Assert-DistributionNotices.ps1') -Root $root
 New-Item -ItemType Directory -Force $bin,$tests|Out-Null
 $csc=Join-Path $env:WINDIR 'Microsoft.NET\Framework64\v4.0.30319\csc.exe'
 if(!(Test-Path $csc)){throw '.NET Framework 4.8 developer compiler is required'}
@@ -20,6 +21,8 @@ New-Item -ItemType Directory -Force (Join-Path $bin 'assets')|Out-Null
 foreach($name in @('bridge.ico','settings.ico','setup.ico')){Copy-Item -LiteralPath (Join-Path $root ('assets\'+$name)) -Destination (Join-Path $bin ('assets\'+$name)) -Force}
 $hashes=@{};foreach($name in @('Bridge.exe','BridgeConfigCore.dll','BridgeProtocol.dll')){$hashes[$name]=(Get-FileHash (Join-Path $bin $name)).Hash};$hashes|ConvertTo-Json|Set-Content (Join-Path $bin 'artifact-hashes.json') -Encoding UTF8
 Copy-Item (Join-Path $root 'vendor') $bin -Recurse -Force
+foreach($name in @('LICENSE','THIRD_PARTY_NOTICES.md')){Copy-Item -LiteralPath (Join-Path $root $name) -Destination (Join-Path $bin $name) -Force}
+& (Join-Path $root 'tools\Assert-DistributionNotices.ps1') -Root $bin
 if(!$SkipTests){
  Copy-Item (Join-Path $bin 'BridgeConfigCore.dll') $tests -Force;Copy-Item (Join-Path $bin 'BridgeProtocol.dll') $tests -Force
  & $csc /nologo /warnaserror+ /r:System.Web.Extensions.dll ("/r:"+(Join-Path $bin 'BridgeConfigCore.dll')) ("/out:"+(Join-Path $tests 'ConfigTests.exe')) (Join-Path $src 'ConfigTests.cs')

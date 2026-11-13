@@ -10,9 +10,11 @@ The installer and source bundle do **not** include proprietary WIRES-X executabl
 
 ## Included GPL dependency: com0com
 
-com0com 3.0.0.0, the upstream signed x64 installer and its management/driver files, are bundled separately under the GNU GPL, not under M5LEE's MIT licence. Copyright remains with the com0com authors and respective contributors. The complete upstream source archive, GPL licence, original readme, origin URLs and file hashes are supplied in `vendor/com0com/` in both the installed payload and source release. See `vendor/com0com/ORIGIN.md`. The upstream signatures identify CyberCircuits; they are not M5LEE or Yaesu signatures. This is not a guarantee of compatibility with modern Windows kernel security policies. The setup verifies signature/integrity and actual port health and never changes Windows security settings. No com0com source/binary code has been modified.
+com0com 3.0.0.0, the upstream signed x64 installer and its management/driver files, are bundled separately under the GNU GPL, not under M5LEE's MIT licence. Copyright remains with Vyacheslav Frolov and the respective com0com contributors; retain the individual upstream copyright and licence headers. The complete upstream source archive, GPL licence, original readme, origin URLs and file hashes are supplied in `vendor/com0com/` in both the installed payload and source release. See `vendor/com0com/ORIGIN.md`. The upstream signatures identify CyberCircuits; they are not M5LEE or Yaesu signatures. This is not a guarantee of compatibility with modern Windows kernel security policies. The setup verifies signature/integrity and actual port health and never changes Windows security settings. No com0com source/binary code has been modified.
 
 The runtime supports a hash-pinned WIRES-X 2.0.1.0 executable for the experimental observer. A hash identifies a supported local installation; it does not redistribute or license that executable. A different build is refused rather than silently treated as compatible.
+
+The [WIRES-X terms review](https://github.com/M5LEE/wiresx-2-ysf-bridge/blob/main/docs/YAESU-TERMS-REVIEW.md) records the exact installer EULA checked and the limits of the available server-agreement evidence. No Yaesu approval or entitlement to server access is claimed.
 
 ## Protocol research and references
 
