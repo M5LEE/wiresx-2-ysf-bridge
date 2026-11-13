@@ -61,7 +61,12 @@ namespace CumbriaCQ.Offline {
   }
   public static byte[] VoiceFrame(byte[] voice,int fn,int ft,int dgId,string data){
    if(voice==null || voice.Length!=65)throw new ArgumentException("Encoded voice must be 65 bytes");
-   byte[] encoded=EncodeData(TextField(data,10));byte[] frame=BaseFrame(1,fn,ft,dgId);
+   return VoiceDataFrame(voice,fn,ft,dgId,TextField(data,10));
+  }
+  public static byte[] VoiceDataFrame(byte[] voice,int fn,int ft,int dgId,byte[] data){
+   if(voice==null || voice.Length!=65)throw new ArgumentException("Encoded voice must be 65 bytes");
+   if(data==null || data.Length!=10)throw new ArgumentException("YSF binary data field must be 10 bytes");
+   byte[] encoded=EncodeData(data);byte[] frame=BaseFrame(1,fn,ft,dgId);
    for(int i=0;i<5;i++){Array.Copy(encoded,i*5,frame,30+i*18,5);Array.Copy(voice,i*13,frame,35+i*18,13);}
    return frame;
   }

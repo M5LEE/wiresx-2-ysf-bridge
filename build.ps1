@@ -58,5 +58,9 @@ if(!$SkipTests){
  if($LASTEXITCODE){throw 'Callsign metadata test compilation failed'}
  & (Join-Path $tests 'CallsignMetadataTests.exe')
  if($LASTEXITCODE){throw 'Callsign metadata contract failed'}
+ & $csc /nologo /warnaserror+ ("/r:"+(Join-Path $bin 'BridgeProtocol.dll')) ("/out:"+(Join-Path $tests 'AuxiliaryMetadataTests.exe')) (Join-Path $root 'tests\AuxiliaryMetadataTests.cs')
+ if($LASTEXITCODE){throw 'Auxiliary metadata test compilation failed'}
+ & (Join-Path $tests 'AuxiliaryMetadataTests.exe')
+ if($LASTEXITCODE){throw 'Auxiliary metadata preservation failed'}
 }
 Write-Output ('BUILD_OK '+$bin)

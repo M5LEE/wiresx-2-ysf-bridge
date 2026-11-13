@@ -56,7 +56,7 @@ namespace CumbriaCQ.Offline {
    if(outbound)Send(b,YsfWire.Packet(gateway,source,YsfWire.HeaderFrame(source,gateway,dgId,true),sequence,true),now);
    if(outbound || inbound || dataTx)b.Serial.Add(Notice("00"));
    dataReady=false;dataTx=false;dataPhase=0;
-   pending.Clear();received.Clear();outbound=false;inbound=false;ending=false;rxEnding=false;synced=false;metadata=null;source=null;rxSource=null;rxVia=null;
+   pending.Clear();received.Clear();outbound=false;inbound=false;ending=false;rxEnding=false;synced=false;metadata=null;source=null;metadataAuxiliary=null;auxiliary=null;rxSource=null;rxVia=null;
    nativeFrames.Clear();nativeFrameOrder.Clear();
    return b;
   }
@@ -74,7 +74,7 @@ namespace CumbriaCQ.Offline {
   readonly Queue<int> nativeFrameOrder=new Queue<int>();
   readonly Dictionary<string,long> recent=new Dictionary<string,long>();
   readonly Queue<KeyValuePair<string,long>> recentOrder=new Queue<KeyValuePair<string,long>>();
-  string metadata,source;long metadataAt,nextDue,lastVoice,lastPlayout;bool outbound,ending;int expected,sequence,fn;
+  string metadata,source;byte[] metadataAuxiliary,auxiliary;long metadataAt,nextDue,lastVoice,lastPlayout;bool outbound,ending;int expected,sequence,fn;
   string rxSource,rxVia;bool inbound,synced,rxEnding;long rxDue,rxLast;int rxCounter,rxExpected=-1;
   long rxHeaderAt;int rxHeaderIndex;
   static readonly string[] ReceiveHeaderSlots={"11","12","21","22","31","32"};
@@ -157,7 +157,7 @@ namespace CumbriaCQ.Offline {
    else if(frame=="D1C0000"){b.Serial.Add(Status(dataTx?(dataPhase==1?"05":dataPhase==3?"45":"25"):outbound?"45":inbound?(synced?"31":"11"):"00"));}
    else if(NodeDataEcho.ForFrame(frame)!=null){b=Stop(now);dataReady=true;dataAt=now;b.Serial.Add(frame);}
    else if(headerSource!=null){
-    if(!inbound){metadata=headerSource;metadataAt=now;}
+    if(!inbound){metadata=headerSource;metadataAuxiliary=TransmitMetadata.AuxiliaryForFrame(frame);metadataAt=now;Count(metadataAuxiliary==null?"transmit-auxiliary-unavailable":"transmit-auxiliary-validated");}
     b.Serial.Add("D1F00010");Count("transmit-header-acknowledged");
     Count("transmit-header-acknowledged-"+(frame.Length==115?"extended":"short")+frame.Substring(7,2));
    }else if(frame!=null && frame.StartsWith("D1E")){
@@ -175,7 +175,7 @@ namespace CumbriaCQ.Offline {
     int counter=Convert.ToInt32(frame.Substring(8,4),16);
     string payloadDigest=Digest(payload),seenDigest;
     if(outbound && nativeFrames.TryGetValue(counter,out seenDigest) && seenDigest==payloadDigest){Count("transmit-duplicate");return b;}
-    if(!outbound){source=metadata;outbound=true;expected=counter;sequence=1;fn=0;nextDue=now;lastPlayout=now;Send(b,YsfWire.Packet(gateway,source,YsfWire.HeaderFrame(source,gateway,dgId,false),0,false),now);}
+    if(!outbound){source=metadata;auxiliary=metadataAuxiliary;outbound=true;expected=counter;sequence=1;fn=0;nextDue=now;lastPlayout=now;Send(b,YsfWire.Packet(gateway,source,YsfWire.HeaderFrame(source,gateway,dgId,false),0,false),now);}
     // A bounded forward loss must not lock out the remainder of an over.
     // Preserve duplicate/backward/misaligned rejection; do not invent audio.
     if(counter!=expected){
@@ -201,7 +201,10 @@ namespace CumbriaCQ.Offline {
    if(outbound && pending.Count>0 && now>=nextDue){
     // Yaesu table 4-4: FN2 is downlink; FN4/5 are ID remarks, not callsigns.
     string data=fn==0?"**********":fn==1?source:fn==2?gateway:"";
-    Send(b,YsfWire.Packet(gateway,source,YsfWire.VoiceFrame(pending.Dequeue(),fn,7,dgId,data),sequence,false),now);
+    byte[] radio;
+    if(fn>=6 && auxiliary!=null){byte[] block=new byte[10];Array.Copy(auxiliary,(fn-6)*10,block,0,10);radio=YsfWire.VoiceDataFrame(pending.Dequeue(),fn,7,dgId,block);Count("transmit-auxiliary-blocks-emitted");}
+    else radio=YsfWire.VoiceFrame(pending.Dequeue(),fn,7,dgId,data);
+    Send(b,YsfWire.Packet(gateway,source,radio,sequence,false),now);
     Count("transmit-voice-emitted");
     lastPlayout=now;
     sequence=(sequence+1)&127;fn=(fn+1)%8;nextDue+=100;if(nextDue<=now)nextDue=now+100;
@@ -240,7 +243,7 @@ namespace CumbriaCQ.Offline {
    PumpOutbound(b,now);
    if(outbound && ending && pending.Count==0){
     Send(b,YsfWire.Packet(gateway,source,YsfWire.HeaderFrame(source,gateway,dgId,true),sequence,true),now);
-    outbound=false;ending=false;metadata=null;source=null;b.Serial.Add(Notice("00"));
+    outbound=false;ending=false;metadata=null;source=null;metadataAuxiliary=null;auxiliary=null;b.Serial.Add(Notice("00"));
     nativeFrames.Clear();nativeFrameOrder.Clear();
    }
    return b;

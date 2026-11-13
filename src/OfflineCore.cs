@@ -4,13 +4,29 @@ using System.Collections.Generic;
 namespace CumbriaCQ.Offline {
  public static class TransmitMetadata {
   // D1F is the write-direction twin of D1G: six fixed ASCII fields,
-  // with either the short position slot or the extended 20-byte hex slot.
+  // with either a short auxiliary slot or the extended 20-byte hex slot.
   // Recognising this envelope only acknowledges metadata; it never keys RF.
   public static string SourceForFrame(string frame){
    if(frame==null || (frame.Length!=89 && frame.Length!=115))return null;
    if(!System.Text.RegularExpressions.Regex.IsMatch(frame,@"\A(?:D1F00522[01]016000[ -~]{74}|D1F006C2[01]016000[ -~]{60}[0-9A-F]{40})\z"))return null;
    string source=frame.Substring(25,10).TrimEnd(' ');
    return System.Text.RegularExpressions.Regex.IsMatch(source,@"\A[A-Z0-9][A-Z0-9 /-]{0,9}\z")?source:null;
+  }
+  // Optional DT data is binary, separate from printable callsign metadata.
+  // The first byte is not assumed to be a universal record length. Preserve
+  // genuine supported records only; never manufacture a position/model/ID.
+  public static byte[] AuxiliaryForFrame(string frame){
+   if(SourceForFrame(frame)==null)return null;
+   string hex=frame.Substring(75);
+   if(!System.Text.RegularExpressions.Regex.IsMatch(hex,@"\A(?:[0-9A-F]{14}|[0-9A-F]{40})\z"))return null;
+   byte[] data=new byte[20];int length=hex.Length/2;
+   for(int i=0;i<length;i++)data[i]=Convert.ToByte(hex.Substring(i*2,2),16);
+   if(!((data[1]==0x22 && (data[2]==0x61 || data[2]==0x62)) || (data[1]==0x47 && data[2]==0x64)))return null;
+   for(int end=length-2;end>=5;end--)if(data[end]==3){
+    int sum=0;for(int i=0;i<=end;i++)sum=(sum+data[i])&255;
+    if(sum==data[end+1])return data;
+   }
+   return null;
   }
  }
  public static class NodeDataEcho {
