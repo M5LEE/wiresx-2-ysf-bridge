@@ -50,9 +50,10 @@ sealed class ConfigForm:Form {
  readonly string root,path,cache,smoke;
  ConfigSession session;CatalogSnapshot catalog;Room selected;bool filling,busy;
  readonly TextBox search=new TextBox();readonly ListView list=new ListView();
- readonly Label cacheInfo=new Label(),selection=new Label(),status=new Label();
+ readonly Label cacheInfo=new Label(),selection=new Label(),status=new Label(),runtimeInfo=new Label();
  readonly NumericUpDown dg=new NumericUpDown();readonly CheckBox zero=new CheckBox();
- readonly Button refresh=new Button(),save=new Button();readonly ProgressBar progress=new ProgressBar();
+ readonly Button refresh=new Button(),save=new Button(),apply=new Button();readonly ProgressBar progress=new ProgressBar();
+ readonly Timer applyTimer=new Timer {Interval=1000};string pendingApply="";DateTime pendingSince;bool applyPending;
  public ConfigForm(string root,string path,string smoke){
   this.root=root;this.path=path;this.smoke=smoke;cache=Path.Combine(root,"room-cache","catalog.json");
   Icon=new System.Drawing.Icon(Path.Combine(AppDomain.CurrentDomain.BaseDirectory,"assets","settings.ico"));
@@ -67,14 +68,15 @@ sealed class ConfigForm:Form {
   list.Columns.Add("YSF ID",70);list.Columns.Add("Full room name",210);list.Columns.Add("Country",65);list.Columns.Add("Host",210);list.Columns.Add("UDP",65);list.Columns.Add("Description",250);layout.Controls.Add(list,0,3);
   selection.Dock=DockStyle.Fill;selection.Padding=new Padding(0,7,0,0);layout.Controls.Add(selection,0,4);
   var options=new FlowLayoutPanel {Dock=DockStyle.Fill,WrapContents=false};options.Controls.Add(new Label {Text="DG-ID",AutoSize=true,Margin=new Padding(0,7,8,0)});dg.Minimum=0;dg.Maximum=127;dg.Width=70;options.Controls.Add(dg);zero.Text="Accept DG-ID 0 from this reflector";zero.AutoSize=true;zero.Margin=new Padding(20,6,0,0);options.Controls.Add(zero);layout.Controls.Add(options,0,5);
-  layout.Controls.Add(new Label {Text="Saved changes apply on the NEXT bridge start. AS IS; optional donations via Help below.\r\nSelect your YSF destination here. The bridge follows the currently connected WIRES-X room.",Dock=DockStyle.Fill,ForeColor=Color.DimGray},0,6);
-  var bottom=new TableLayoutPanel {Dock=DockStyle.Fill,ColumnCount=5};bottom.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,100));for(int i=0;i<4;i++)bottom.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute,116));
+  runtimeInfo.Text="Save for the next start, or Apply YSF room between overs without restarting WIRES-X.";runtimeInfo.Dock=DockStyle.Fill;runtimeInfo.ForeColor=Color.DimGray;layout.Controls.Add(runtimeInfo,0,6);
+  var bottom=new TableLayoutPanel {Dock=DockStyle.Fill,ColumnCount=6};bottom.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,100));for(int i=0;i<5;i++)bottom.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute,i==3?132:106));
   status.Dock=DockStyle.Fill;status.AutoEllipsis=true;bottom.Controls.Add(status,0,0);
-  var reload=new Button {Text="Station setup",Dock=DockStyle.Fill};bottom.Controls.Add(reload,1,0);var launcher=new Button {Text="Launcher...",Dock=DockStyle.Fill};bottom.Controls.Add(launcher,2,0);save.Text="Save config";save.Dock=DockStyle.Fill;bottom.Controls.Add(save,3,0);var close=new Button {Text="Close",Dock=DockStyle.Fill};bottom.Controls.Add(close,4,0);layout.Controls.Add(bottom,0,7);
+  var reload=new Button {Text="Station setup",Dock=DockStyle.Fill};bottom.Controls.Add(reload,1,0);var launcher=new Button {Text="Launcher...",Dock=DockStyle.Fill};bottom.Controls.Add(launcher,2,0);save.Text="Save config";save.Dock=DockStyle.Fill;bottom.Controls.Add(save,3,0);apply.Text="Apply YSF room";apply.Dock=DockStyle.Fill;bottom.Controls.Add(apply,4,0);var close=new Button {Text="Close",Dock=DockStyle.Fill};bottom.Controls.Add(close,5,0);layout.Controls.Add(bottom,0,7);
   progress.Dock=DockStyle.Bottom;progress.Height=3;progress.Style=ProgressBarStyle.Marquee;progress.Visible=false;Controls.Add(progress);
   search.TextChanged+=delegate{FillRooms();};list.SelectedIndexChanged+=delegate{SelectRoom();};refresh.Click+=delegate{RefreshCatalog(null);};save.Click+=delegate{SaveSettings();};close.Click+=delegate{Close();};cacheInfo.Cursor=Cursors.Hand;cacheInfo.AccessibleDescription="Optional CumbriaCQ support: click to open donation information";cacheInfo.Click+=delegate{Process.Start(new ProcessStartInfo("https://cumbriacq.com/donate-support/") {UseShellExecute=true});};reload.Click+=delegate{Process.Start(new ProcessStartInfo(Application.ExecutablePath,"--setup") {UseShellExecute=true});};launcher.Click+=delegate{Process.Start(new ProcessStartInfo(Application.ExecutablePath,"--launcher") {UseShellExecute=true});};
   FormClosing+=delegate(object sender,FormClosingEventArgs e){if(busy){e.Cancel=true;status.Text="Please wait for the bounded list update to finish.";}};
   LoadSettings();TryLoadCatalog();
+  apply.Click+=delegate{ApplySelected();};applyTimer.Tick+=delegate{RefreshLiveApply();};FormClosed+=delegate{applyTimer.Dispose();};RefreshLiveApply();applyTimer.Start();
   Shown+=delegate{if(smoke!=null)BeginInvoke(new Action(delegate{RefreshCatalog(SmokeFinish);}));};
  }
  void LoadSettings(){session=SettingsStore.Open(path);dg.Value=session.Settings.DgId;zero.Checked=session.Settings.AllowZeroDg;status.Text="Saved target: "+session.Settings.YsfRoomId+" "+session.Settings.YsfRoomName;}
@@ -88,7 +90,7 @@ sealed class ConfigForm:Form {
   list.EndUpdate();filling=false;SelectRoom();
  }
  void SelectRoom(){
-  if(filling)return;selected=list.SelectedItems.Count==1?list.SelectedItems[0].Tag as Room:null;save.Enabled=selected!=null && !busy;
+  if(filling)return;selected=list.SelectedItems.Count==1?list.SelectedItems[0].Tag as Room:null;save.Enabled=selected!=null && !busy;apply.Enabled=selected!=null && !busy && !applyPending;
   if(selected==null){selection.Text="Select a reflector to see its full endpoint and save it.";return;}
   selection.Text=selected.Id+"  "+selected.Name+"\r\n"+selected.Host+":"+selected.Port+"  "+selected.Description;
   bool same=selected.Id==session.Settings.YsfRoomId && selected.Host==session.Settings.YsfHost && selected.Port==session.Settings.YsfPort;
@@ -97,8 +99,25 @@ sealed class ConfigForm:Form {
  bool SaveSettings(){try{
   if(selected==null)throw new ArgumentException("Select a reflector first");
   var settings=new BridgeSettings {SchemaVersion=1,YsfRoomId=selected.Id,YsfRoomName=selected.Name,YsfHost=selected.Host,YsfPort=selected.Port,DgId=(int)dg.Value,AllowZeroDg=zero.Checked};
-  string backup=SettingsStore.Save(path,settings,session.Fingerprint);session=SettingsStore.Open(path);status.Text="Saved for next start"+(backup.Length>0?"; backup kept.":".");return true;
+  string backup=SettingsStore.Save(path,settings,session.Fingerprint);session=SettingsStore.Open(path);status.Text="Saved; Apply YSF room to use now"+(backup.Length>0?". Backup kept.":".");return true;
  }catch(Exception e){Failure(e);return false;}}
+ void ApplySelected(){
+  if(!SaveSettings())return;
+  try{pendingApply=YsfApplyStore.Submit(root,AppDomain.CurrentDomain.BaseDirectory.TrimEnd(Path.DirectorySeparatorChar));pendingSince=DateTime.UtcNow;applyPending=true;apply.Enabled=false;status.Text="Apply queued. Waiting for an idle boundary; WIRES-X stays running.";RefreshLiveApply();}
+  catch(Exception e){Failure(e);}
+ }
+ void RefreshLiveApply(){
+  try{
+   var view=YsfApplyStore.View(root,AppDomain.CurrentDomain.BaseDirectory.TrimEnd(Path.DirectorySeparatorChar));runtimeInfo.Text="Active YSF: "+view.ActiveLabel+"\r\nSave only keeps settings; Apply YSF room changes the running link between overs.";applyPending=view.Pending;
+   if(pendingApply.Length>0){
+    if(view.ErrorRequestId==pendingApply && view.Error.Length>0){status.Text=view.Error;pendingApply="";}
+    else if(view.RequestId==pendingApply){status.Text=view.Message;if(!view.Pending)pendingApply="";}
+    else if((DateTime.UtcNow-pendingSince).TotalSeconds<15)applyPending=true;
+    else{status.Text="Apply request not acknowledged. The saved target is not confirmed active.";pendingApply="";}
+   }
+  }catch{runtimeInfo.Text="Live apply unavailable: the bridge must be running with live YSF apply support.\r\nSaved settings still apply on the next start.";applyPending=false;}
+  apply.Enabled=selected!=null && !busy && !applyPending;
+ }
  void Failure(Exception e){status.Text=e.Message;if(smoke==null)MessageBox.Show(this,e.Message,"Configuration not changed",MessageBoxButtons.OK,MessageBoxIcon.Warning);}
  void RefreshCatalog(Action<bool> finished){
   if(busy)return;busy=true;refresh.Enabled=false;save.Enabled=false;progress.Visible=true;status.Text="Downloading and validating reflector list...";

@@ -1,6 +1,6 @@
 # WiresX 2 YSF Bridge
 
-**By M5LEE · 0.1.0-alpha.9 · Free, experimental Windows software**
+**By M5LEE · 0.1.0-alpha.10 · Free, experimental Windows software**
 
 Connect the room currently linked in **official WIRES-X** to a **YSF reflector**. WiresX 2 YSF Bridge carries digital voice and supported caller information between the two networks, using your existing WIRES-X installation and genuine HRI-200.
 
@@ -10,11 +10,11 @@ Connect the room currently linked in **official WIRES-X** to a **YSF reflector**
 
 | File | Download |
 |---|---|
-| Windows x64 installer | [Setup.exe](https://github.com/M5LEE/wiresx-2-ysf-bridge/releases/download/v0.1.0-alpha.9/WiresX-2-YSF-Bridge-0.1.0-alpha.9-Setup.exe) |
-| Alpha.9 source snapshot | [Source.zip](https://github.com/M5LEE/wiresx-2-ysf-bridge/releases/download/v0.1.0-alpha.9/WiresX-2-YSF-Bridge-0.1.0-alpha.9-Source.zip) |
-| File checksums | [SHA256SUMS.txt](https://github.com/M5LEE/wiresx-2-ysf-bridge/releases/download/v0.1.0-alpha.9/WiresX-2-YSF-Bridge-0.1.0-alpha.9-SHA256SUMS.txt) |
+| Windows x64 installer | [Setup.exe](https://github.com/M5LEE/wiresx-2-ysf-bridge/releases/download/v0.1.0-alpha.10/WiresX-2-YSF-Bridge-0.1.0-alpha.10-Setup.exe) |
+| Alpha.10 source snapshot | [Source.zip](https://github.com/M5LEE/wiresx-2-ysf-bridge/releases/download/v0.1.0-alpha.10/WiresX-2-YSF-Bridge-0.1.0-alpha.10-Source.zip) |
+| File checksums | [SHA256SUMS.txt](https://github.com/M5LEE/wiresx-2-ysf-bridge/releases/download/v0.1.0-alpha.10/WiresX-2-YSF-Bridge-0.1.0-alpha.10-SHA256SUMS.txt) |
 
-[Release page](https://github.com/M5LEE/wiresx-2-ysf-bridge/releases/tag/v0.1.0-alpha.9) · [Release notes](docs/RELEASE-alpha.9.md)
+[Release page](https://github.com/M5LEE/wiresx-2-ysf-bridge/releases/tag/v0.1.0-alpha.10) · [Release notes](docs/RELEASE-alpha.10.md)
 
 Downloads currently require signing in to a GitHub account with access to this private repository.
 
@@ -23,6 +23,8 @@ Downloads currently require signing in to a GitHub account with access to this p
 - Links one WIRES-X room to one YSF destination at a time.
 - Follows room changes made in WIRES-X.
 - Searchable YSF room list and configurable DG-ID.
+- Change the YSF destination between overs with **Apply YSF room**, without restarting WIRES-X.
+- Separate active and saved YSF destination display, with old-room logout and failed-switch recovery.
 - Caller callsign and supported C4FM metadata forwarding.
 - Windows launcher with room, connection and tray status.
 - Optional automatic startup when you sign in to Windows.
@@ -42,7 +44,7 @@ This is an independent project, not an official Yaesu product. WIRES-X software 
 
 ## Installation and first-time setup
 
-1. Download and run **`WiresX-2-YSF-Bridge-0.1.0-alpha.9-Setup.exe`** from the release page. Leave **Set up my bridge** selected on the final page.
+1. Download and run **`WiresX-2-YSF-Bridge-0.1.0-alpha.10-Setup.exe`** from the release page. Leave **Set up my bridge** selected on the final page.
 2. Enter your **YSF bridge callsign** and select the **YSF destination room**. Check the destination's required DG-ID.
 3. Enable **Advanced setup** and choose **Automatic setup**. After confirmation, setup detects the HRI-200 and configures the virtual-port connection. A compatible existing connection is reused.
 4. If no valid radio profile is present, connect and power on your FTM-100, then choose **Create connection profile** under Advanced setup. The capture takes about two minutes, may close and reopen WIRES-X, and blocks PTT/voice during capture. Reopen Station setup afterwards to check the result.
@@ -52,9 +54,11 @@ If setup already reports a valid connection and profile, reuse them; there is no
 
 ## Everyday use
 
-Choose or change the WIRES-X room in official WIRES-X as usual. Choose the YSF destination in the bridge settings. Saved bridge settings take effect on the next bridge start.
+Choose or change the WIRES-X room in official WIRES-X as usual. To change the YSF side while running, select the destination and its DG-ID in bridge settings, then choose **Apply YSF room**. The bridge waits for a quiet point, logs out of the old reflector and joins the new one without restarting WIRES-X or the serial connection.
 
-The launcher shows the current WIRES-X room, saved YSF destination and connection state. Use **Start bridge** and **Stop bridge** to control the link. It runs until stopped or a safety fault occurs; it does not stop on a normal session timer.
+Check **Active YSF** for the running destination; **Save config** alone saves the next-start selection and does not switch a running connection. A failed switch is reported and attempts to restore the previous destination. Reflector dashboard lists can lag; see [live YSF destination changes](docs/LIVE-YSF-APPLY.md) for details and limitations.
+
+The launcher shows the current WIRES-X room, active/saved YSF destination and connection state. Use **Start bridge** and **Stop bridge** to control the link. It runs until stopped or a safety fault occurs; it does not stop on a normal session timer.
 
 **Closing the window does not stop the bridge.** It hides to the Windows notification area. Double-click the tray icon to reopen it. **Exit status app (bridge stays running)** closes only the status application. A separate bridge session cannot be controlled from this launcher.
 
@@ -70,7 +74,7 @@ This requires an interactive Windows sign-in. It is **not** a pre-login service 
 
 Choose **Stop bridge**, wait for cleanup, then **Exit status app** and close any setup/settings windows before running an upgrade or uninstall. The installer refuses an active installation rather than stopping it for you. Do not run two copies of the bridge at once.
 
-Normal uninstall retains your station settings and radio profile, shared virtual-port drivers and devices, and official WIRES-X. A valid existing profile can be reused after reinstalling. If you already run the alpha.9 callsign correction, an immediate reinstall is unnecessary.
+Normal uninstall retains your station settings and radio profile, shared virtual-port drivers and devices, and official WIRES-X. A valid existing profile can be reused after reinstalling. Upgrading from an older release requires one stopped installation; later YSF destination changes use **Apply YSF room** without restarting WIRES-X.
 
 ## Alpha limitations
 

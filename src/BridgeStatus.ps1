@@ -23,6 +23,14 @@ function Read-BridgeStatusJson($path){
  $f=[IO.File]::Open($path,[IO.FileMode]::Open,[IO.FileAccess]::Read,([IO.FileShare]::ReadWrite -bor [IO.FileShare]::Delete))
  $reader=[IO.StreamReader]::new($f);try{if($f.Length -gt 1048576){throw 'StatusFileTooLarge'};return ($reader.ReadToEnd()|ConvertFrom-Json)}finally{$reader.Dispose()}
 }
+function Get-BridgeYsfDestination([bool]$own,[bool]$fresh,$progress,$saved){
+ if($own){
+  if($fresh -and $progress.YsfActive -and $progress.YsfActive.YsfRoomId -cmatch '^[0-9]{5}$'){return ([string]$progress.YsfActive.YsfRoomId+' '+[string]$progress.YsfActive.YsfRoomName)}
+  return 'Active destination not reported'
+ }
+ if($saved){return ([string]$saved.YsfRoomId+' '+[string]$saved.YsfRoomName+' (saved)')}
+ return 'Not configured'
+}
 function Get-CurrentBridgeStatus {
  . (Join-Path $PSScriptRoot 'PublicRuntime.ps1')
  $setup=$false;$station=$null;try{$station=Get-Station -RequireProfile;$setup=(Get-FileHash $station.NativePath).Hash -ceq $script:SupportedNativeHash}catch{}
@@ -52,7 +60,8 @@ function Get-CurrentBridgeStatus {
  }
  $snapshot=@{ExistingBridge=($adapters.Count -gt 0);OwnerPresent=($null -ne $owner);OwnLive=$own;OwnerState=$owner.State;SetupReady=$setup;Configured=[bool]$progress.Configured;ProgressFresh=$progressFresh;ProofFresh=$proofFresh;Connected=[bool]$proof.Connected;RoomId=$proof.RoomId;LinkHealthy=[bool]$progress.LinkHealthy;Fault=$fault}
  $view=Get-BridgeDisplayState $snapshot
- $ysf='Not configured';try{Assert-Binary 'BridgeConfigCore.dll';[Reflection.Assembly]::LoadFrom((Join-Path $script:Bin 'BridgeConfigCore.dll'))|Out-Null;$settings=[CumbriaCQ.Configuration.SettingsStore]::Open((Join-Path $script:Root 'bridge-config.json')).Settings;$ysf=$settings.YsfRoomId+' '+$settings.YsfRoomName}catch{}
+ $settings=$null;try{Assert-Binary 'BridgeConfigCore.dll';[Reflection.Assembly]::LoadFrom((Join-Path $script:Bin 'BridgeConfigCore.dll'))|Out-Null;$settings=[CumbriaCQ.Configuration.SettingsStore]::Open((Join-Path $script:Root 'bridge-config.json')).Settings}catch{}
+ $ysf=Get-BridgeYsfDestination $own $progressFresh $progress $settings
  . (Join-Path $PSScriptRoot 'StartupIntegration.ps1')
  $startup=@{Enabled=$false;State='Error';Message='Startup status unavailable.'};try{$startup=Get-BridgeStartupStatus}catch{$startup.Message=$_.Exception.Message}
  return @{Event='Check';Data=@{StatusCode=$view.Code;Summary=$view.Summary;NativeRoom=$view.Room;YsfDestination=$ysf;CanStart=$view.CanStart;CanStop=$view.CanStop;ExistingBridge=$snapshot.ExistingBridge;OwnerManifestPresent=$snapshot.OwnerPresent;SetupReady=$setup;OwnLive=$own;StartupEnabled=$startup.Enabled;StartupState=$startup.State;StartupMessage=$startup.Message;CheckedUtc=[DateTime]::UtcNow.ToString('o');NonInvasive=$true}}

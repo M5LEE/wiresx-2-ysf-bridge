@@ -60,7 +60,14 @@ namespace CumbriaCQ.Offline {
    metadataProfile=null;sourceProfile=null;nativeFrames.Clear();nativeFrameOrder.Clear();
    return b;
   }
-  readonly string gateway,idle,status;string receiveRoom,receiveRadioId;readonly int dgId;readonly bool allowZeroDg,measuredFtm100Receive;
+  readonly string gateway,idle,status;string receiveRoom,receiveRadioId;int dgId;bool allowZeroDg;readonly bool measuredFtm100Receive;
+  bool NoActiveStream { get {return !outbound && !inbound && !ending && !dataReady && !dataTx && pending.Count==0 && received.Count==0;} }
+  public bool CanChangeYsf(long now){return NoActiveStream && (metadata==null || (now>=metadataAt && now-metadataAt>1000));}
+  public void SetYsfOptions(int nextDgId,bool nextAllowZeroDg){
+   if(nextDgId<0 || nextDgId>127)throw new ArgumentException("YSF DG-ID");
+   if(!NoActiveStream)throw new InvalidOperationException("Wait for the current over to finish");
+   dgId=nextDgId;allowZeroDg=nextAllowZeroDg;recent.Clear();recentOrder.Clear();Count("ysf-destination-changes");
+  }
   public BridgeBatch SetConnectedRoom(string room,long now){
    // PowerShell binds a null string argument as String.Empty: both mean disconnected.
    if(room==String.Empty)room=null;
@@ -173,7 +180,15 @@ namespace CumbriaCQ.Offline {
     if(!outbound && (metadata==null || now<metadataAt || now-metadataAt>1000)){Count("transmit-missing-header");return b;}
 
     if(Seen("receive:"+(outbound?source:metadata)+":"+Digest(payload),now)){Count("transmit-loop");return b;}
-    int counter=Convert.ToInt32(frame.Substring(8,4),16);
+    int wireCounter=Convert.ToInt32(frame.Substring(8,4),16),counter=wireCounter;
+    // Some native network streams mark slot35 of a40-count cycle as36.
+    // Consume that existing logical slot, not a new phase or a missing frame.
+    // Require the current bounded phase or a remembered packet; other offsets
+    // and unknown forward jumps retain the ordinary rejection rules.
+    if(outbound && wireCounter!=expected && wireCounter%40==36){
+     int logical=(wireCounter-1)&65535,ahead=(logical-expected)&65535;
+     if(nativeFrames.ContainsKey(logical) || (ahead<=20 && ahead%5==0))counter=logical;
+    }
     string payloadDigest=Digest(payload),seenDigest;
     if(outbound && nativeFrames.TryGetValue(counter,out seenDigest) && seenDigest==payloadDigest){Count("transmit-duplicate");return b;}
     if(!outbound){source=metadata;sourceProfile=metadataProfile;outbound=true;expected=counter;sequence=1;fn=0;nextDue=now;lastPlayout=now;Count("transmit-profile-ft"+sourceProfile.FrameTotal);if(sourceProfile.Remarks.Trim().Length>0)Count("transmit-native-remarks-preserved");Send(b,YsfWire.Packet(gateway,source,YsfWire.HeaderFrame(source,gateway,sourceProfile.Uplink,sourceProfile.FrameTotal,dgId,false),0,false),now);}
@@ -183,7 +198,7 @@ namespace CumbriaCQ.Offline {
      int ahead=(counter-expected)&65535;
      if(ahead>20 || ahead%5!=0){
       Count("transmit-sequence-rejected");Count(ahead>32768?"transmit-sequence-backward":ahead%5!=0?"transmit-sequence-misaligned":"transmit-sequence-large-forward");
-      diagnostics["transmit-last-rejected-counter"]=counter;diagnostics["transmit-last-expected-counter"]=expected;return b;
+      diagnostics["transmit-last-rejected-counter"]=wireCounter;diagnostics["transmit-last-expected-counter"]=expected;return b;
      }
      Count("transmit-sequence-gap");for(int skipped=0;skipped<ahead;skipped+=5)Count("transmit-frames-missing");
     }
@@ -191,6 +206,7 @@ namespace CumbriaCQ.Offline {
     // Track validated input even when bounded backpressure drops its payload.
     // Otherwise our own overflow looks like an ever-growing upstream gap.
     expected=(counter+5)&65535;lastVoice=now;
+    if(counter!=wireCounter)Count("transmit-native-cycle-marker");
     nativeFrames[counter]=payloadDigest;nativeFrameOrder.Enqueue(counter);while(nativeFrameOrder.Count>16){nativeFrames.Remove(nativeFrameOrder.Dequeue());}
     if(pending.Count>=OutboundQueueLimit){Count("transmit-queue-full");return b;}
     pending.Enqueue((byte[])payload.Clone());Count("transmit-voice-admitted");

@@ -15,4 +15,9 @@ $s.ExistingBridge=$false;$r=Get-BridgeDisplayState $s;Check ($r.Code -ceq 'Needs
 $s.OwnerPresent=$false;$r=Get-BridgeDisplayState $s;Check ($r.Code -ceq 'Stopped' -and $r.CanStart -and !$r.CanStop) 'Stopped and ready status must permit manual start'
 $s.SetupReady=$false;$r=Get-BridgeDisplayState $s;Check ($r.Code -ceq 'SetupRequired' -and !$r.CanStart) 'Unprepared station must not auto-start'
 $s.SetupReady=$true;$s.Fault='Synthetic fault';$r=Get-BridgeDisplayState $s;Check ($r.Code -ceq 'Error' -and !$r.CanStop) 'Stopped adapter fault must remain visible'
+if(!(Get-Command Get-BridgeYsfDestination -ErrorAction SilentlyContinue)){Write-Output 'Launcher must display the active YSF destination rather than only the saved target';exit 1}
+$saved=[pscustomobject]@{YsfRoomId='00016';YsfRoomName='NEW'};$active=[pscustomobject]@{YsfActive=[pscustomobject]@{YsfRoomId='23534';YsfRoomName='OLD'}}
+Check ((Get-BridgeYsfDestination $true $true $active $saved) -ceq '23534 OLD') 'A running bridge must display its reported active target, not the saved target'
+Check ((Get-BridgeYsfDestination $true $false $active $saved) -notmatch '00016|23534') 'Stale progress must not assert an active YSF room'
+Check ((Get-BridgeYsfDestination $false $false $null $saved) -ceq '00016 NEW (saved)') 'A stopped bridge may show the saved target explicitly'
 @{Pass=$true;Assertions=$passed;HardwareTouched=$false;SyntheticSnapshotsOnly=$true}|ConvertTo-Json -Compress

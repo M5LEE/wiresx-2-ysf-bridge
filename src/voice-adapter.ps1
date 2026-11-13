@@ -32,13 +32,16 @@ $address=@($addresses|Where-Object {$_.AddressFamily -eq [Net.Sockets.AddressFam
 if(!$address){$address=@($addresses|Where-Object {$_.AddressFamily -eq [Net.Sockets.AddressFamily]::InterNetworkV6})[0]}
 if(!$address){throw 'Reflector host has no supported IP address'}
 $socket=[Net.Sockets.UdpClient]::new($address.AddressFamily);$socket.Client.ReceiveTimeout=500;$socket.Connect($address,$settings.YsfPort)
+$ysfReload=[CumbriaCQ.Configuration.LiveYsfLink]::new($socket,$settings,$address,$station.Gateway)
+$adapterStartUtc=(Get-Process -Id $PID).StartTime.ToUniversalTime().ToString('o')
+$lastNativeVoice=-10000L;$lastYsfVoice=-10000L;$lastYsfCheck=-1000L;$ysfLastRequest='';$ysfApplyError='';$ysfApplyErrorId=''
 $receiveAny=if($address.AddressFamily -eq [Net.Sockets.AddressFamily]::InterNetworkV6){[Net.IPAddress]::IPv6Any}else{[Net.IPAddress]::Any}
 $poll=[Text.Encoding]::ASCII.GetBytes('YSFP'+$station.Gateway.PadRight(10));$unlink=[Text.Encoding]::ASCII.GetBytes('YSFU'+$station.Gateway.PadRight(10))
 $configured=$false;$roomVerified=$false;$linkHealthy=$false;$wasActive=$false;$nodeSaved=$false;$proofReason='not-yet-read'
 $currentRoom=$null;$connectionKey=$null;$roomBarrier=$null
 $resetGuard=[CumbriaCQ.Offline.ConfigurationResetGuard]::new()
 $seen=@{};$hardware=@{};$wireOut=@{};$networkOut=@{};$dropped=@{};$headerShapes=@{};$counts=@{Polls=0;PollReplies=0;ValidOwnRoom=0;OtherOrInvalidRoom=0;NetworkData=0;GateDrops=0;PhysicalControlsBlocked=0;Configurations=0}
-$failure=$null;$nextPoll=0;$lastAck=-1;$lastStopCheck=0;$lastProofCheck=-1000;$clock=$null;$cpuStart=0
+$failure=$null;$nextPoll=0;$lastStopCheck=0;$lastProofCheck=-1000;$clock=$null;$cpuStart=0
 function Count-Key($table,$key){if(!$table.ContainsKey($key)){$table[$key]=0};$table[$key]++}
 function Write-ProgressSnapshot([string]$Path,[string]$Json){
  $temp=$Path+'.'+[Guid]::NewGuid().ToString('N')+'.pending'
@@ -52,12 +55,34 @@ function Write-ProgressSnapshot([string]$Path,[string]$Json){
 }
 function Reply-Frame([string]$body){$virt.Write(([char]1)+$body+([char]4));$key=$body.Substring(0,[Math]::Min(3,$body.Length));Count-Key $wireOut $key}
 function Send-Batch($batch,[bool]$endingOnly=$false){
- foreach($frame in $batch.Serial){if($frame.StartsWith('P')){throw 'Physical control in software response output'};Reply-Frame $frame}
+ foreach($frame in $batch.Serial){if($frame.StartsWith('P')){throw 'Physical control in software response output'}}
+ # Do not hold already-due voice behind a potentially blocking serial ACK.
  foreach($packet in $batch.Network){
   if($ForwardVoice -and (($configured -and $roomVerified -and $linkHealthy) -or ($endingOnly -and (($packet[34] -band 1) -eq 1)))){
    $null=$socket.Send($packet,$packet.Length);Count-Key $networkOut 'YSFD';if(($packet[34] -band 1) -ne 0){Count-Key $networkOut 'EOT'}
   }else{Count-Key $dropped 'network-output-gated'}
  }
+ foreach($frame in $batch.Serial){Reply-Frame $frame}
+}
+function Update-YsfApply([long]$now){
+ if($now-$script:lastYsfCheck -ge 1000){
+  $script:lastYsfCheck=$now
+  try{
+   $request=[CumbriaCQ.Configuration.YsfApplyStore]::ReadForAdapter($root,$Tag,$PID,$adapterStartUtc,$ysfLastRequest)
+   if($request){
+    $script:ysfLastRequest=$request.RequestId;$script:ysfApplyErrorId=$request.RequestId
+    $ysfReload.Request($request.Settings,$request.RequestId,$now);$script:ysfApplyError=''
+   }
+  }catch{$script:ysfApplyError=$_.Exception.GetBaseException().Message}
+ }
+ $oldRevision=$ysfReload.Revision;$oldTransport=$ysfReload.TransportGeneration
+ $quiet=$engine.CanChangeYsf($now) -and $now-$lastNativeVoice -ge 1000 -and $now-$lastYsfVoice -ge 1000
+ $ysfReload.Advance($now,$quiet)
+ if($ysfReload.TransportGeneration -ne $oldTransport){Send-Batch ($engine.Stop($now)) $true}
+ if($ysfReload.Revision -ne $oldRevision){
+  $next=$ysfReload.ActiveSettings;$engine.SetYsfOptions($next.DgId,$next.AllowZeroDg);$script:settings=$next
+ }
+ $script:linkHealthy=$ysfReload.IsHealthy($now)
 }
 try{
  if(Get-Process Wires-X -ErrorAction SilentlyContinue){throw 'Start adapter before WIRES-X'}
@@ -82,10 +107,12 @@ try{
     $currentRoom=$nextRoom;$connectionKey=$nextKey
    }
   }
-  if($now -ge $nextPoll){$null=$socket.Send($poll,$poll.Length);$counts.Polls++;$nextPoll=$now+5000}
-  $linkHealthy=($lastAck -ge 0 -and $now-$lastAck -le 15000)
+  if($now -ge $nextPoll){if($ysfReload.CanPoll){try{$null=$socket.Send($poll,$poll.Length);$counts.Polls++}catch{if($_.Exception.GetBaseException() -isnot [Net.Sockets.SocketException]){throw};$ysfReload.ObserveTransportError();Count-Key $dropped 'ysf-poll-socket-error'};$nextPoll=$now+5000}}
+  $linkHealthy=$ysfReload.IsHealthy($now)
   if($virt.BytesToRead -gt 0){
    foreach($b in $hostParser.Feed([Text.Encoding]::ASCII.GetBytes($virt.ReadExisting()))){
+    # Serial ACK/dispatch can span a playout deadline within one parsed batch.
+    $now=$clock.ElapsedMilliseconds
     $key=if($b -match '^[A-Z][0-9]{2,6}$'){$b}else{$b.Substring(0,[Math]::Min(3,$b.Length))+' length='+$b.Length};Count-Key $seen $key
     # Command/declared length/mode only: no callsign, GPS or voice payload retained.
     if($b -match '^D1F[0-9A-F]{12}'){Count-Key $headerShapes ($b.Substring(0,15)+' length='+$b.Length)}
@@ -112,6 +139,7 @@ try{
      # Keep it responsive even while the independent network/room gate is closed.
      Send-Batch ($engine.OnClient($b,$now))
     }elseif($b -eq 'P100000' -or $b.StartsWith('D1E')){
+     if($b.StartsWith('D1E')){$lastNativeVoice=$now}
      if($configured -and $roomVerified -and $linkHealthy -and $ForwardVoice){Send-Batch ($engine.OnClient($b,$now))}
      else{$counts.GateDrops++;if($b -eq 'P100000'){Reply-Frame $idles[-1]}elseif($b.StartsWith('D1E')){try{$null=[CumbriaCQ.Offline.VoiceCodec]::ParseVoice($b);Reply-Frame 'D1E00010'}catch [ArgumentException]{Count-Key $dropped 'malformed-serial-voice'}}}
     }else{Count-Key $dropped $key}
@@ -119,21 +147,26 @@ try{
   }
   if($real.BytesToRead -gt 0){foreach($b in $realParser.Feed([Text.Encoding]::ASCII.GetBytes($real.ReadExisting()))){$kind=if($b -in @('M00','M10')){'handshake'}elseif($b -match '^R[0-9A-Fa-f]+$'){'genuine-HRI-identity'}else{$null};if($kind){Reply-Frame $b;Count-Key $hardware $kind}}}
   for($i=0;$i -lt 32 -and $socket.Available -gt 0;$i++){
+   $now=$clock.ElapsedMilliseconds
    $remote=[Net.IPEndPoint]::new($receiveAny,0)
-   try{$packet=$socket.Receive([ref]$remote)}catch [Net.Sockets.SocketException]{$linkHealthy=$false;break}
-   if($packet.Length -eq 14 -and [Text.Encoding]::ASCII.GetString($packet,0,4) -eq 'YSFP'){$lastAck=$now;$counts.PollReplies++;$linkHealthy=$true}
+   try{$packet=$socket.Receive([ref]$remote)}catch{if($_.Exception.GetBaseException() -isnot [Net.Sockets.SocketException]){throw};$ysfReload.ObserveTransportError();$linkHealthy=$false;break}
+   if($remote.Address.ToString() -cne $ysfReload.PeerAddress -or $remote.Port -ne $ysfReload.PeerPort){Count-Key $dropped 'old-peer-datagram';continue}
+   if($packet.Length -eq 14 -and [Text.Encoding]::ASCII.GetString($packet,0,4) -eq 'YSFP'){$ysfReload.ObserveAck($now);$counts.PollReplies++;$linkHealthy=$ysfReload.IsHealthy($now)}
    elseif($packet.Length -eq 155 -and [Text.Encoding]::ASCII.GetString($packet,0,4) -eq 'YSFD'){
+    $lastYsfVoice=$now
     $counts.NetworkData++
     if($configured -and $roomVerified -and $linkHealthy -and $ForwardVoice){Send-Batch ($engine.OnReflector($packet,$now))}else{$counts.GateDrops++}
    }
   }
+  $now=$clock.ElapsedMilliseconds
   $active=$configured -and $roomVerified -and $linkHealthy -and $ForwardVoice
   if($wasActive -and !$active){Send-Batch ($engine.Stop($now)) $true}
   Send-Batch ($engine.ControlTick($now))
   if($active){Send-Batch ($engine.Tick($now))};$wasActive=$active
+  Update-YsfApply $clock.ElapsedMilliseconds
   if($now-$lastStopCheck -ge 1000){
    $lastStopCheck=$now
-   $snapshot=[pscustomobject]@{Tag=$Tag;Gateway=$station.Gateway;ElapsedMs=$now;Configured=$configured;OwnRoomVerified=$roomVerified;RoomProofReason=$proofReason;LinkHealthy=$linkHealthy;SerialReplies=$wireOut;NetworkSent=$networkOut;Counters=$counts;EngineCounts=$engine.DiagnosticCounts;Dropped=$dropped;HeaderShapes=$headerShapes}|ConvertTo-Json -Depth 4 -Compress
+   $snapshot=[pscustomobject]@{Tag=$Tag;Gateway=$station.Gateway;ElapsedMs=$now;Configured=$configured;OwnRoomVerified=$roomVerified;RoomProofReason=$proofReason;LinkHealthy=$linkHealthy;SerialReplies=$wireOut;NetworkSent=$networkOut;Counters=$counts;EngineCounts=$engine.DiagnosticCounts;Dropped=$dropped;HeaderShapes=$headerShapes;YsfApplyVersion=1;AdapterPid=$PID;AdapterStartUtc=$adapterStartUtc;YsfProgramRoot=$script:Bin;YsfActive=$ysfReload.ActiveSettings;YsfEndpoint=@{Address=$ysfReload.PeerAddress;Port=$ysfReload.PeerPort;LocalPort=$socket.Client.LocalEndPoint.Port;Revision=$ysfReload.Revision;Paused=$ysfReload.Paused};YsfApply=@{RequestId=$ysfReload.RequestId;State=$ysfReload.State;Message=$ysfReload.Message;Pending=$ysfReload.Pending;ErrorRequestId=$ysfApplyErrorId;Error=$ysfApplyError}}|ConvertTo-Json -Depth 5 -Compress
    if(!(Write-ProgressSnapshot (Join-Path $root ('progress-'+$Tag+'.json')) $snapshot)){Count-Key $counts 'ProgressWriteFailures'}
    if(Test-Path (Join-Path $root ('stop-'+$Tag+'.flag'))){break}
   }

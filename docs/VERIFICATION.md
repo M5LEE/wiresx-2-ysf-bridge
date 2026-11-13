@@ -1,6 +1,6 @@
 # Compatibility and testing
 
-**WiresX 2 YSF Bridge 0.1.0-alpha.9** is an experimental release. This page summarises its test coverage and compatibility limits.
+**WiresX 2 YSF Bridge 0.1.0-alpha.10** is an experimental release. This page summarises its test coverage and compatibility limits.
 
 ## Supported setup
 
@@ -10,7 +10,7 @@
 - The bundled com0com 3.0.0.0 x64 virtual-port dependency.
 - The same Windows account for setup, operation, startup configuration and removal.
 
-## Alpha.9 validation
+## Alpha.10 validation
 
 | Area | Coverage |
 |---|---|
@@ -19,15 +19,20 @@
 | C4FM metadata | 16,167 profile checks covering absent/short/full data, supported envelopes, identity fields and transmission boundaries |
 | Voice preservation | Synthetic comparisons of voice bytes, packet timing, sequence fields, serial replies and the reverse receive path |
 | Application | Configuration, setup, import, startup, status-helper lifecycle, tray behaviour and active-installation guards |
+| Audio packet handling | Native counter compatibility and production adapter scheduling/dispatch regressions, using the selected voice runtime |
+| Live YSF changes | Real loopback UDP handover, idle boundaries, request ownership, active/saved state and actual configuration-button tests |
+| Old-room logout | Dropped first/first-two unlink packets, keepalive suppression, failed-target cleanup and rollback tests |
 | Release files | Extracted installer payload checked against its assembly hash manifest; published assets downloaded and checksum-verified |
-| Installer guard | Exact alpha.9 EXE refused an isolated destination containing a bridge ownership record, without copying the application |
-| Live station | Audio and Yaesu/DMR caller display reported working after the alpha.9 metadata correction |
+| Installer guard | Exact alpha.10 EXE checked for safe refusal of an isolated destination containing a bridge ownership record, without copying the application |
+| Live station | Current voice runtime exercised with real traffic in both directions; prior accepted caller-display behaviour retained |
 
 The automated device and startup tests use isolated fixtures and simulated actions. They do not perform a fresh driver installation or a full station startup. Live feedback relates to the tested station, not every receiver or network path. DMR display observations do not imply a native DMR interface in this application.
 
 ## Compatibility limits
 
-- **The alpha.9 installer is unsigned.** A complete install/upgrade/uninstall cycle has not been repeated for this exact release, and clean-PC installation is not fully validated.
+- **The alpha.10 installer is unsigned.** A complete install/upgrade/uninstall cycle has not been repeated for this exact release, and clean-PC installation is not fully validated.
+- YSF unlink has no standard remote-removal acknowledgement. Retries improve logout reliability but cannot guarantee delivery when every retry is lost; reflector web lists can be delayed.
+- Occasional queue-pressure and native admission events remain diagnostic limitations. Clean observed packet timing and good listening results do not establish zero loss on every path.
 - Secure Boot and Memory Integrity may prevent the legacy com0com driver from loading. A valid publisher signature alone does not establish compatibility. Setup checks actual device health; disabling Windows security is not a supported workaround.
 - First-time capture and setup on independent stations, other radio models and other WIRES-X versions are not confirmed compatible.
 - Automatic startup requires interactive sign-in. Unattended power-loss recovery and real reboot/sign-in behaviour need checking on each station.

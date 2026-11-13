@@ -9,7 +9,7 @@ foreach($f in Get-ChildItem $src -Filter '*.ps1'){
  $tokens=$null;$errors=$null;[Management.Automation.Language.Parser]::ParseFile($f.FullName,[ref]$tokens,[ref]$errors)|Out-Null
  if($errors.Count){throw ('PowerShell syntax error in '+$f.Name+': '+($errors.Message -join '; '))}
 }
-& $csc /nologo /warnaserror+ /target:library /r:System.Web.Extensions.dll ("/out:"+(Join-Path $bin 'BridgeConfigCore.dll')) (Join-Path $src 'YsfCatalog.cs') (Join-Path $src 'BridgeConfigCore.cs')
+& $csc /nologo /warnaserror+ /target:library /r:System.Web.Extensions.dll ("/out:"+(Join-Path $bin 'BridgeConfigCore.dll')) (Join-Path $src 'YsfCatalog.cs') (Join-Path $src 'BridgeConfigCore.cs') (Join-Path $src 'LiveYsfLink.cs') (Join-Path $src 'YsfApplyStore.cs')
 if($LASTEXITCODE){throw 'Configuration SDK compilation failed'}
 & $csc /nologo /warnaserror+ /target:library ("/out:"+(Join-Path $bin 'BridgeProtocol.dll')) (Join-Path $src 'OfflineCore.cs') (Join-Path $src 'YsfWire.cs') (Join-Path $src 'VoiceEngine.cs')
 if($LASTEXITCODE){throw 'Protocol SDK compilation failed'}
@@ -65,5 +65,28 @@ if(!$SkipTests){
  if($LASTEXITCODE){throw 'C4FM profile test compilation failed'}
  & (Join-Path $tests 'C4fmProfileTests.exe')
  if($LASTEXITCODE){throw 'C4FM metadata profile contract failed'}
+ & $csc /nologo /warnaserror+ ("/r:"+(Join-Path $bin 'BridgeProtocol.dll')) ("/out:"+(Join-Path $tests 'NativeCounterCompatibilityTests.exe')) (Join-Path $root 'tests\NativeCounterCompatibilityTests.cs')
+ if($LASTEXITCODE){throw 'Native counter compatibility test compilation failed'}
+ & (Join-Path $tests 'NativeCounterCompatibilityTests.exe')
+ if($LASTEXITCODE){throw 'Native counter compatibility contract failed'}
+ & powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File (Join-Path $root 'tests\AdapterClockTests.ps1') -AdapterPath (Join-Path $bin 'voice-adapter.ps1') -AssemblyPath (Join-Path $bin 'BridgeProtocol.dll')
+ if($LASTEXITCODE){throw 'Adapter clock and batch dispatch contract failed'}
+ & $csc /nologo /warnaserror+ ("/r:"+(Join-Path $bin 'BridgeProtocol.dll')) ("/out:"+(Join-Path $tests 'YsfIdleBoundaryTests.exe')) (Join-Path $root 'tests\YsfIdleBoundaryTests.cs')
+ if($LASTEXITCODE){throw 'YSF idle boundary test compilation failed'}
+ & (Join-Path $tests 'YsfIdleBoundaryTests.exe');if($LASTEXITCODE){throw 'YSF idle boundary tests failed'}
+ foreach($name in @('YsfLiveLinkTests','YsfApplyStoreTests','YsfLogoutTests')){
+  & $csc /nologo /warnaserror+ /r:System.Web.Extensions.dll ("/r:"+(Join-Path $bin 'BridgeConfigCore.dll')) ("/out:"+(Join-Path $tests ($name+'.exe'))) (Join-Path $root ('tests\'+$name+'.cs'))
+  if($LASTEXITCODE){throw ($name+' compilation failed')}
+  & (Join-Path $tests ($name+'.exe')) (Join-Path $root ('tests\'+$name+'-'+[Guid]::NewGuid().ToString('N')))
+  if($LASTEXITCODE){throw ($name+' failed')}
+ }
+ & powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File (Join-Path $root 'tests\YsfAdapterApplyTests.ps1') -AdapterPath (Join-Path $bin 'voice-adapter.ps1') -Bin $bin -Fixture (Join-Path $root ('tests\ysf-adapter-'+[Guid]::NewGuid().ToString('N')))
+ if($LASTEXITCODE){throw 'Actual YSF adapter apply tests failed'}
+ & powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File (Join-Path $root 'tests\YsfLogoutPollTests.ps1') -AdapterPath (Join-Path $bin 'voice-adapter.ps1') -Bin $bin
+ if($LASTEXITCODE){throw 'YSF logout keepalive suppression tests failed'}
+ & $csc /nologo /warnaserror+ /r:System.Web.Extensions.dll /r:System.Windows.Forms.dll /r:System.Drawing.dll ("/r:"+(Join-Path $bin 'BridgeConfigCore.dll')) ("/out:"+(Join-Path $tests 'YsfApplyUiTests.exe')) (Join-Path $root 'tests\YsfApplyUiTests.cs')
+ if($LASTEXITCODE){throw 'YSF apply UI test compilation failed'}
+ & (Join-Path $tests 'YsfApplyUiTests.exe') $bin (Join-Path $root ('tests\ysf-ui-'+[Guid]::NewGuid().ToString('N')))
+ if($LASTEXITCODE){throw 'YSF apply UI tests failed'}
 }
 Write-Output ('BUILD_OK '+$bin)
