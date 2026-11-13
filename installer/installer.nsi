@@ -4,7 +4,7 @@ Unicode True
 !include "x64.nsh"
 !include "WinVer.nsh"
 !define PRODUCT "WiresX 2 YSF Bridge"
-!define VERSION "0.1.0-alpha.8"
+!define VERSION "0.1.0-alpha.9"
 !define MUI_ICON "../assets/setup.ico"
 !define MUI_UNICON "../assets/bridge.ico"
 !define KEY "Software\Microsoft\Windows\CurrentVersion\Uninstall\M5LEE.WIRESXtoYSF"
@@ -14,14 +14,14 @@ InstallDir "$PROGRAMFILES64\M5LEE\WiresX-2-YSF-Bridge"
 RequestExecutionLevel admin
 SetCompressor /SOLID lzma
 ManifestSupportedOS all
-VIProductVersion "0.1.0.8"
+VIProductVersion "0.1.0.9"
 VIAddVersionKey /LANG=1033 "ProductName" "${PRODUCT}"
 VIAddVersionKey /LANG=1033 "ProductVersion" "${VERSION}"
-VIAddVersionKey /LANG=1033 "FileVersion" "0.1.0.8"
+VIAddVersionKey /LANG=1033 "FileVersion" "0.1.0.9"
 VIAddVersionKey /LANG=1033 "FileDescription" "Experimental alpha bridge tools installer"
 VIAddVersionKey /LANG=1033 "LegalCopyright" "Copyright (c) 2026 M5LEE"
 !define MUI_ABORTWARNING
-!define MUI_WELCOMEPAGE_TEXT "WiresX 2 YSF Bridge by M5LEE - experimental alpha.$\r$\n$\r$\nWIRES-X must already be installed, configured and working with your account and genuine HRI-200. Set up WIRES-X first.$\r$\n$\r$\nChoose the YSF bridge callsign and destination. The bridge follows the room currently connected in WIRES-X.$\r$\n$\r$\nAlpha.8 adds tray status and optional Windows sign-in startup. Enable startup in the launcher; the bridge then launches WIRES-X itself. Windows automatic sign-in is never configured.$\r$\n$\r$\nBefore upgrading, Stop this installed bridge and Exit its tray app. Running sessions are not stopped by the installer."
+!define MUI_WELCOMEPAGE_TEXT "WiresX 2 YSF Bridge by M5LEE - experimental alpha.$\r$\n$\r$\nWIRES-X must already be installed, configured and working with your account and genuine HRI-200. Set up WIRES-X first.$\r$\n$\r$\nChoose the YSF bridge callsign and destination. The bridge follows the room currently connected in WIRES-X.$\r$\n$\r$\nAlpha.9 includes the C4FM callsign and metadata-cycle correction, simpler setup and lower-overhead status checks. Optional Windows sign-in startup is retained; Windows automatic sign-in is never configured.$\r$\n$\r$\nBefore upgrading, Stop this installed bridge and Exit its tray app. Running sessions are not stopped by the installer."
 !insertmacro MUI_PAGE_WELCOME
 !insertmacro MUI_PAGE_LICENSE "../LICENSE"
 !insertmacro MUI_PAGE_COMPONENTS
