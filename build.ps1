@@ -58,5 +58,9 @@ if(!$SkipTests){
  if($LASTEXITCODE){throw 'Callsign metadata test compilation failed'}
  & (Join-Path $tests 'CallsignMetadataTests.exe')
  if($LASTEXITCODE){throw 'Callsign metadata contract failed'}
+ & $csc /nologo /warnaserror+ ("/r:"+(Join-Path $bin 'BridgeProtocol.dll')) ("/out:"+(Join-Path $tests 'C4fmProfileTests.exe')) (Join-Path $root 'tests\C4fmProfileTests.cs')
+ if($LASTEXITCODE){throw 'C4FM profile test compilation failed'}
+ & (Join-Path $tests 'C4fmProfileTests.exe')
+ if($LASTEXITCODE){throw 'C4FM metadata profile contract failed'}
 }
 Write-Output ('BUILD_OK '+$bin)

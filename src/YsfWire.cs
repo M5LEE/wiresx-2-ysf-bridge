@@ -40,9 +40,13 @@ namespace CumbriaCQ.Offline {
    return HeaderFrame(source,"",dgId,terminator);
   }
   public static byte[] HeaderFrame(string source,string downlink,int dgId,bool terminator){
+   return HeaderFrame(source,downlink,"",7,dgId,terminator);
+  }
+  public static byte[] HeaderFrame(string source,string downlink,string uplink,int frameTotal,int dgId,bool terminator){
+   if(frameTotal<5 || frameTotal>7)throw new ArgumentException("V/D2 frame total");
    byte[] firstData=new byte[20];Array.Copy(TextField("**********",10),firstData,10);Array.Copy(TextField(source,10),0,firstData,10,10);
-   byte[] linkData=TextField("",20);Array.Copy(TextField(downlink,10),linkData,10);
-   byte[] first=EncodeData(firstData),second=EncodeData(linkData);byte[] frame=BaseFrame(terminator?2:0,0,7,dgId);
+   byte[] linkData=new byte[20];Array.Copy(TextField(downlink,10),linkData,10);Array.Copy(TextField(uplink,10),0,linkData,10,10);
+   byte[] first=EncodeData(firstData),second=EncodeData(linkData);byte[] frame=BaseFrame(terminator?2:0,0,frameTotal,dgId);
    for(int i=0;i<5;i++){Array.Copy(first,i*9,frame,30+i*18,9);Array.Copy(second,i*9,frame,39+i*18,9);}
    return frame;
   }
@@ -60,8 +64,12 @@ namespace CumbriaCQ.Offline {
    byte[] frame=new byte[120];byte[] sync={0xD4,0x71,0xC9,0x63,0x4D};Array.Copy(sync,frame,5);Array.Copy(EncodeFich(fi,fn,ft,dgId),0,frame,5,25);return frame;
   }
   public static byte[] VoiceFrame(byte[] voice,int fn,int ft,int dgId,string data){
+   return VoiceDataFrame(voice,fn,ft,dgId,TextField(data,10));
+  }
+  public static byte[] VoiceDataFrame(byte[] voice,int fn,int ft,int dgId,byte[] data){
    if(voice==null || voice.Length!=65)throw new ArgumentException("Encoded voice must be 65 bytes");
-   byte[] encoded=EncodeData(TextField(data,10));byte[] frame=BaseFrame(1,fn,ft,dgId);
+   if(data==null || data.Length!=10)throw new ArgumentException("Data block must be 10 bytes");
+   byte[] encoded=EncodeData(data);byte[] frame=BaseFrame(1,fn,ft,dgId);
    for(int i=0;i<5;i++){Array.Copy(encoded,i*5,frame,30+i*18,5);Array.Copy(voice,i*13,frame,35+i*18,13);}
    return frame;
   }

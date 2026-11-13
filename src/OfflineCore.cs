@@ -2,6 +2,16 @@
 using System;
 using System.Collections.Generic;
 namespace CumbriaCQ.Offline {
+ public sealed class TransmitProfile {
+  readonly byte[] auxiliary;
+  public readonly int FrameTotal;
+  public readonly string Uplink,Remarks;
+  internal TransmitProfile(byte[] data,string uplink,string remarks){auxiliary=data;FrameTotal=data==null?5:data.Length<=10?6:7;Uplink=uplink;Remarks=remarks;}
+  public byte[] DataBlock(int number){
+   if(number<6 || number>FrameTotal)throw new ArgumentException("Auxiliary frame number");
+   byte[] block=new byte[10];int offset=(number-6)*10;Array.Copy(auxiliary,offset,block,0,Math.Min(10,auxiliary.Length-offset));return block;
+  }
+ }
  public static class TransmitMetadata {
   // D1F is the write-direction twin of D1G: six fixed ASCII fields,
   // with either the short position slot or the extended 20-byte hex slot.
@@ -11,6 +21,20 @@ namespace CumbriaCQ.Offline {
    if(!System.Text.RegularExpressions.Regex.IsMatch(frame,@"\A(?:D1F00522[01]016000[ -~]{74}|D1F006C2[01]016000[ -~]{60}[0-9A-F]{40})\z"))return null;
    string source=frame.Substring(25,10).TrimEnd(' ');
    return System.Text.RegularExpressions.Regex.IsMatch(source,@"\A[A-Z0-9][A-Z0-9 /-]{0,9}\z")?source:null;
+  }
+  public static TransmitProfile ProfileForFrame(string frame){
+   if(SourceForFrame(frame)==null)return null;
+   return new TransmitProfile(Auxiliary(frame.Substring(75)),frame.Substring(45,10),frame.Substring(55,20));
+  }
+  static byte[] Auxiliary(string hex){
+   if(!System.Text.RegularExpressions.Regex.IsMatch(hex,@"\A(?:[0-9A-F]{14}|[0-9A-F]{40})\z"))return null;
+   byte[] data=new byte[hex.Length/2];for(int i=0;i<data.Length;i++)data[i]=Convert.ToByte(hex.Substring(i*2,2),16);
+   int length=data[1]==0x22 && data[2]==0x61?7:(data[1]==0x22 && data[2]==0x62)||(data[1]==0x47 && data[2]==0x64)?20:0;
+   if(length==0 || data.Length<length || data[length-2]!=3)return null;
+   int sum=0;for(int i=0;i<length-1;i++)sum+=data[i];if((byte)sum!=data[length-1])return null;
+   for(int i=length;i<data.Length;i++)if(data[i]!=0 && data[i]!=32)return null;
+   // The first byte differs between genuine formats; do not assume it is a length.
+   Array.Resize(ref data,length);return data;
   }
  }
  public static class NodeDataEcho {
