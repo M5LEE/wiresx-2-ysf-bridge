@@ -4,7 +4,7 @@ Unicode True
 !include "x64.nsh"
 !include "WinVer.nsh"
 !define PRODUCT "WiresX 2 YSF Bridge"
-!define VERSION "0.1.0-alpha.11"
+!define VERSION "0.1.0-alpha.12"
 !define MUI_ICON "../assets/setup.ico"
 !define MUI_UNICON "../assets/bridge.ico"
 !define KEY "Software\Microsoft\Windows\CurrentVersion\Uninstall\M5LEE.WIRESXtoYSF"
@@ -14,14 +14,14 @@ InstallDir "$PROGRAMFILES64\M5LEE\WiresX-2-YSF-Bridge"
 RequestExecutionLevel admin
 SetCompressor /SOLID lzma
 ManifestSupportedOS all
-VIProductVersion "0.1.0.11"
+VIProductVersion "0.1.0.12"
 VIAddVersionKey /LANG=1033 "ProductName" "${PRODUCT}"
 VIAddVersionKey /LANG=1033 "ProductVersion" "${VERSION}"
-VIAddVersionKey /LANG=1033 "FileVersion" "0.1.0.11"
+VIAddVersionKey /LANG=1033 "FileVersion" "0.1.0.12"
 VIAddVersionKey /LANG=1033 "FileDescription" "Experimental alpha bridge tools installer"
 VIAddVersionKey /LANG=1033 "LegalCopyright" "Copyright (c) 2026 M5LEE"
 !define MUI_ABORTWARNING
-!define MUI_WELCOMEPAGE_TEXT "WiresX 2 YSF Bridge by M5LEE - experimental alpha.$\r$\n$\r$\nWIRES-X must already be installed, configured and working with your account and genuine HRI-200. Set up WIRES-X first.$\r$\n$\r$\nChoose the YSF bridge callsign and destination. The bridge follows the room currently connected in WIRES-X.$\r$\n$\r$\nAlpha.11 improves back-to-back overs and bounded receive recovery. Live listening and extended operation of these changes remain pending. Live YSF switching and optional Windows sign-in startup are retained.$\r$\n$\r$\nBefore upgrading, Stop this installed bridge and Exit its tray app. Running sessions are not stopped by the installer."
+!define MUI_WELCOMEPAGE_TEXT "WiresX 2 YSF Bridge by M5LEE - experimental alpha.$\r$\n$\r$\nWIRES-X must already be installed, configured and working with your account and genuine HRI-200. Set up WIRES-X first.$\r$\n$\r$\nChoose the YSF bridge callsign and destination. The bridge follows the room currently connected in WIRES-X.$\r$\n$\r$\nAlpha.12 includes the GNU GPLv3-or-later licence and updated tester guidance, with the same voice runtime as alpha.11. Live listening and extended operation remain pending.$\r$\n$\r$\nBefore upgrading, Stop this installed bridge and Exit its tray app. Running sessions are not stopped by the installer."
 !insertmacro MUI_PAGE_WELCOME
 !insertmacro MUI_PAGE_LICENSE "../LICENSE"
 !insertmacro MUI_PAGE_COMPONENTS
@@ -92,6 +92,7 @@ Section "Application (required)" Core
  File "../docs/LIVE-YSF-APPLY.md"
  File "../docs/RELEASE-alpha.10.md"
  File "../docs/RELEASE-alpha.11.md"
+ File "../docs/RELEASE-alpha.12.md"
  File "../docs/RECEIVE-RECOVERY.md"
  File "../docs/DEVELOPMENT.md"
  File "../docs/C4FM-METADATA-PROFILES.md"
@@ -203,6 +204,7 @@ Section "Uninstall"
  Delete "$INSTDIR\docs\LIVE-YSF-APPLY.md"
  Delete "$INSTDIR\docs\RELEASE-alpha.10.md"
  Delete "$INSTDIR\docs\RELEASE-alpha.11.md"
+ Delete "$INSTDIR\docs\RELEASE-alpha.12.md"
  Delete "$INSTDIR\docs\RECEIVE-RECOVERY.md"
  Delete "$INSTDIR\docs\DEVELOPMENT.md"
  Delete "$INSTDIR\docs\C4FM-METADATA-PROFILES.md"

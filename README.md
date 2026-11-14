@@ -1,6 +1,6 @@
 # WiresX 2 YSF Bridge
 
-**By M5LEE · 0.1.0-alpha.11 · Free, experimental Windows software**
+**By M5LEE · 0.1.0-alpha.12 · Free, experimental Windows software**
 
 Connect the room currently linked in **official WIRES-X** to a **YSF reflector**. WiresX 2 YSF Bridge carries digital voice and supported caller information between the two networks, using your existing WIRES-X installation and genuine HRI-200.
 
@@ -10,15 +10,15 @@ Connect the room currently linked in **official WIRES-X** to a **YSF reflector**
 
 | File | Download |
 |---|---|
-| Windows x64 installer | [Setup.exe](https://github.com/M5LEE/wiresx-2-ysf-bridge/releases/download/v0.1.0-alpha.11/WiresX-2-YSF-Bridge-0.1.0-alpha.11-Setup.exe) |
-| Alpha.11 source snapshot | [Source.zip](https://github.com/M5LEE/wiresx-2-ysf-bridge/releases/download/v0.1.0-alpha.11/WiresX-2-YSF-Bridge-0.1.0-alpha.11-Source.zip) |
-| File checksums | [SHA256SUMS.txt](https://github.com/M5LEE/wiresx-2-ysf-bridge/releases/download/v0.1.0-alpha.11/WiresX-2-YSF-Bridge-0.1.0-alpha.11-SHA256SUMS.txt) |
+| Windows x64 installer | [Setup.exe](https://github.com/M5LEE/wiresx-2-ysf-bridge/releases/download/v0.1.0-alpha.12/WiresX-2-YSF-Bridge-0.1.0-alpha.12-Setup.exe) |
+| Alpha.12 source snapshot | [Source.zip](https://github.com/M5LEE/wiresx-2-ysf-bridge/releases/download/v0.1.0-alpha.12/WiresX-2-YSF-Bridge-0.1.0-alpha.12-Source.zip) |
+| File checksums | [SHA256SUMS.txt](https://github.com/M5LEE/wiresx-2-ysf-bridge/releases/download/v0.1.0-alpha.12/WiresX-2-YSF-Bridge-0.1.0-alpha.12-SHA256SUMS.txt) |
 
-[Release page](https://github.com/M5LEE/wiresx-2-ysf-bridge/releases/tag/v0.1.0-alpha.11) · [Release notes](docs/RELEASE-alpha.11.md)
+[Release page](https://github.com/M5LEE/wiresx-2-ysf-bridge/releases/tag/v0.1.0-alpha.12) · [Release notes](docs/RELEASE-alpha.12.md)
 
 Downloads are public; no GitHub sign-in is required.
 
-**Alpha.11 adds receive-recovery fixes validated by automated tests. Live listening and extended operation of these changes remain pending; this is not a beta release.** The previous [alpha.10 release](https://github.com/M5LEE/wiresx-2-ysf-bridge/releases/tag/v0.1.0-alpha.10) remains available.
+**Alpha.12 packages GPLv3-or-later licensing and clearer tester guidance with the same voice runtime as alpha.11. Live listening and extended operation of the receive-recovery changes remain pending; this is not a beta release.** The previous [alpha.11 release](https://github.com/M5LEE/wiresx-2-ysf-bridge/releases/tag/v0.1.0-alpha.11) and [alpha.10 release](https://github.com/M5LEE/wiresx-2-ysf-bridge/releases/tag/v0.1.0-alpha.10) remain available.
 
 ## Features
 
@@ -47,7 +47,7 @@ This is an independent project, not an official Yaesu product. WIRES-X software 
 
 ## Testing with an existing radio-based WIRES-X bridge
 
-For the [alpha.11 tester build](https://github.com/M5LEE/wiresx-2-ysf-bridge/releases/tag/v0.1.0-alpha.11), keep your existing WIRES-X account, room and radio settings as they are. Once this software bridge's setup is complete:
+For the [alpha.12 tester build](https://github.com/M5LEE/wiresx-2-ysf-bridge/releases/tag/v0.1.0-alpha.12), keep your existing WIRES-X account, room and radio settings as they are. Once this software bridge's setup is complete:
 
 1. **Turn off WIRES-X's separate automatic startup**, including any WIRES-X/YMLAN startup entry that launches it independently of the bridge.
 2. **Close WIRES-X completely before disconnecting the radio.**
@@ -58,7 +58,7 @@ For the [alpha.11 tester build](https://github.com/M5LEE/wiresx-2-ysf-bridge/rel
 
 ## Installation and first-time setup
 
-1. Download and run **`WiresX-2-YSF-Bridge-0.1.0-alpha.11-Setup.exe`** from the release page. Leave **Set up my bridge** selected on the final page.
+1. Download and run **`WiresX-2-YSF-Bridge-0.1.0-alpha.12-Setup.exe`** from the release page. Leave **Set up my bridge** selected on the final page.
 2. Enter your **YSF bridge callsign** and select the **YSF destination room**. Check the destination's required DG-ID.
 3. Enable **Advanced setup** and choose **Automatic setup**. After confirmation, setup detects the HRI-200 and configures the virtual-port connection. A compatible existing connection is reused.
 4. If no valid radio profile is present, connect and power on your FTM-100, then choose **Create connection profile** under Advanced setup. The capture takes about two minutes, may close and reopen WIRES-X, and blocks PTT/voice during capture. Reopen Station setup afterwards to check the result.

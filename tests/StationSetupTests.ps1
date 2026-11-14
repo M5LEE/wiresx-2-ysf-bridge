@@ -11,12 +11,19 @@ try{
  Copy-Item (Join-Path $Bin 'FirstRun.ps1') $fixture
  Copy-Item (Join-Path $Bin 'ExistingStation.ps1') $fixture
  $runtime=Get-Content (Join-Path $Bin 'PublicRuntime.ps1') -Raw
- $lines=$runtime -split '\r?\n';$lines[2]='$script:Root=Join-Path $PSScriptRoot ''fixture-data'''
- $lines -join "`r`n"|Set-Content (Join-Path $fixture 'PublicRuntime.ps1') -Encoding UTF8
+ $tokens=$null;$errors=$null;$ast=[Management.Automation.Language.Parser]::ParseInput($runtime,[ref]$tokens,[ref]$errors)
+ if($errors.Count){throw 'FixtureRuntimeSyntaxError'}
+ $rootAssignments=@($ast.FindAll({param($n)$n -is [Management.Automation.Language.AssignmentStatementAst] -and $n.Left.Extent.Text -ceq '$script:Root'},$true))
+ if($rootAssignments.Count -ne 1){throw 'ExpectedOneRuntimeRootAssignment'}
+ $runtime.Replace($rootAssignments[0].Extent.Text,'$script:Root=Join-Path $PSScriptRoot ''fixture-data''')|Set-Content (Join-Path $fixture 'PublicRuntime.ps1') -Encoding UTF8
  $ui=Get-Content (Join-Path $Bin 'station-setup.ps1') -Raw
  if($ui.Split(@('$null=$form.ShowDialog()'),[StringSplitOptions]::None).Count -ne 2){throw 'ExpectedOneDialogEntryPoint'}
  $ui.Replace('$null=$form.ShowDialog()','')|Set-Content (Join-Path $fixture 'station-setup.ps1') -Encoding UTF8
+ . (Join-Path $fixture 'PublicRuntime.ps1')
+ Check ($script:Root -ceq (Join-Path $fixture 'fixture-data')) 'fixture redirects station data before loading the setup UI'
+ Check ($script:Bin -ceq $fixture) 'fixture preserves its own runtime binary directory'
  . (Join-Path $fixture 'station-setup.ps1')
+ Check ($script:Root -ceq (Join-Path $fixture 'fixture-data') -and $script:Bin -ceq $fixture) 'setup UI remains bound to isolated fixture paths'
  Check ($panel.GetControlFromPosition(0,0).Text -ceq 'YSF bridge callsign') 'normal identity field is explicitly YSF-side only'
  Check (!$fields.ContainsKey('OwnRoomId')) 'no native gateway or own-room field is created'
  Check ($ysfChoose -is [Windows.Forms.Button] -and $panel.GetControlFromPosition(0,1).Text -ceq 'YSF destination room') 'normal setup exposes the YSF room chooser'

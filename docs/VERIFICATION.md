@@ -1,6 +1,6 @@
 # Compatibility and testing
 
-**WiresX 2 YSF Bridge 0.1.0-alpha.11** is an experimental release. This page summarises its test coverage and compatibility limits. The receive-recovery changes have automated validation; live listening and extended operation of this version remain pending.
+**WiresX 2 YSF Bridge 0.1.0-alpha.12** is an experimental release. This page summarises its test coverage and compatibility limits. Alpha.12 updates licensing, documentation and versioned packaging; its selected protocol and configuration libraries are byte-identical to alpha.11. The receive-recovery changes have automated validation; live listening and extended operation of this version remain pending.
 
 ## Supported setup
 
@@ -10,7 +10,7 @@
 - The bundled com0com 3.0.0.0 x64 virtual-port dependency.
 - The same Windows account for setup, operation, startup configuration and removal.
 
-## Alpha.11 validation
+## Alpha.12 validation
 
 | Area | Coverage |
 |---|---|
@@ -22,18 +22,19 @@
 | Audio packet handling | Native counter compatibility and production adapter scheduling/dispatch regressions, using the selected voice runtime |
 | Receive recovery | Back-to-back headers, bounded queues, gaps, sequence jumps, overflow recovery and stale-context rejection |
 | Room proof | Same-room reconnect detection, process binding, actual adapter/observer state logic and concurrent file-publication tests |
-| Healthy-traffic comparison | 4,554 timestamped serial/network events matched the alpha.10 reference in both directions and measured/unmeasured receive modes |
+| Healthy-traffic comparison | The unchanged selected protocol previously matched 4,554 timestamped serial/network events against the alpha.10 reference in both directions and measured/unmeasured receive modes; its trace regression is rerun for this package |
 | Live YSF changes | Real loopback UDP handover, idle boundaries, request ownership, active/saved state and actual configuration-button tests |
 | Old-room logout | Dropped first/first-two unlink packets, keepalive suppression, failed-target cleanup and rollback tests |
 | Release files | Extracted installer payload checked against its assembly hash manifest; published assets downloaded and checksum-verified |
-| Installer guard | Exact alpha.11 EXE checked for safe refusal of an isolated destination containing a bridge ownership record, without copying the application |
-| Live station | Alpha.11 listening and extended operation remain pending; earlier-version observations are not acceptance of these new changes |
+| Licence and dependency notices | 26 regression checks cover complete GPLv3 text, Windows line endings, missing/altered notices and upstream dependency source integrity |
+| Installer guard | Exact alpha.12 EXE checked for safe refusal of an isolated destination containing a bridge ownership record, without copying the application |
+| Live station | Alpha.12 listening and extended operation remain pending; earlier-version observations are not acceptance of this package |
 
 The automated device and startup tests use isolated fixtures and simulated actions. They do not perform a fresh driver installation or a full station startup. Earlier live feedback relates to the tested version and station, not every receiver or network path. DMR display observations do not imply a native DMR interface in this application.
 
 ## Compatibility limits
 
-- **The alpha.11 installer is unsigned.** A complete install/upgrade/uninstall cycle has not been repeated for this exact release, and clean-PC installation is not fully validated.
+- **The alpha.12 installer is unsigned.** A complete install/upgrade/uninstall cycle has not been repeated for this exact release, and clean-PC installation is not fully validated.
 - YSF unlink has no standard remote-removal acknowledgement. Retries improve logout reliability but cannot guarantee delivery when every retry is lost; reflector web lists can be delayed.
 - Occasional queue-pressure and native admission events remain diagnostic limitations. Clean observed packet timing and good listening results do not establish zero loss on every path.
 - Secure Boot and Memory Integrity may prevent the legacy com0com driver from loading. A valid publisher signature alone does not establish compatibility. Setup checks actual device health; disabling Windows security is not a supported workaround.
