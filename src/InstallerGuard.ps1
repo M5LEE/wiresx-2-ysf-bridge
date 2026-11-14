@@ -1,4 +1,5 @@
-# Copyright (c) 2026 M5LEE. MIT; see LICENSE.
+# Copyright (c) 2026 M5LEE.
+# SPDX-License-Identifier: GPL-3.0-or-later
 param([string]$TargetDir=$PSScriptRoot,[ValidateSet('Install','Uninstall')][string]$Action='Install')
 $ErrorActionPreference='Stop';$ProgressPreference='SilentlyContinue'
 function Assert-BridgeInstallIdle([string]$TargetDir,$Processes){

@@ -2,6 +2,7 @@
 $ErrorActionPreference='Stop';$ProgressPreference='SilentlyContinue'
 $root=$PSScriptRoot;$src=Join-Path $root 'src';$bin=Join-Path $root 'bin';$tests=Join-Path $root 'tests\bin'
 & (Join-Path $root 'tools\Assert-DistributionNotices.ps1') -Root $root
+if(!$SkipTests){& (Join-Path $root 'tests\DistributionNoticesTests.ps1') -Root $root}
 New-Item -ItemType Directory -Force $bin,$tests|Out-Null
 $csc=Join-Path $env:WINDIR 'Microsoft.NET\Framework64\v4.0.30319\csc.exe'
 if(!(Test-Path $csc)){throw '.NET Framework 4.8 developer compiler is required'}

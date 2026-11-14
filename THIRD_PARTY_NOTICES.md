@@ -2,7 +2,13 @@
 
 **WIRES-X, HRI-200, FTM-100 and Yaesu names, software, drivers, firmware and trademarks remain the property of their respective copyright and trademark owners. All applicable third-party rights are reserved.**
 
-This is independent experimental software by M5LEE. It is not an official Yaesu product and is not affiliated with, sponsored by or endorsed by Yaesu or the WIRES-X software owners. The project's MIT licence grants no rights over their software, firmware, service, licences or trademarks.
+This is independent experimental software by M5LEE. It is not an official Yaesu product and is not affiliated with, sponsored by or endorsed by Yaesu or the WIRES-X software owners. The project's GNU GPLv3-or-later licence grants no rights over their software, firmware, service, licences or trademarks.
+
+## Original bridge contributions
+
+Copyright (c) 2026 M5LEE. Original contributions in the current source are licensed under the GNU General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version (`SPDX-License-Identifier: GPL-3.0-or-later`). The complete licence is in `LICENSE`. The software is provided without warranty, including the implied warranties of merchantability or fitness for a particular purpose, to the extent permitted by law.
+
+Previously published alpha.11 and earlier installers, source archives and version tags retain their original MIT permissions for the bridge code. Changing the current source's licence does not revoke those grants or relicense third-party components. Preserve the licence supplied with each version.
 
 ## Not included
 
@@ -10,7 +16,7 @@ The installer and source bundle do **not** include proprietary WIRES-X executabl
 
 ## Included GPL dependency: com0com
 
-com0com 3.0.0.0, the upstream signed x64 installer and its management/driver files, are bundled separately under the GNU GPL, not under M5LEE's MIT licence. Copyright remains with Vyacheslav Frolov and the respective com0com contributors; retain the individual upstream copyright and licence headers. The complete upstream source archive, GPL licence, original readme, origin URLs and file hashes are supplied in `vendor/com0com/` in both the installed payload and source release. See `vendor/com0com/ORIGIN.md`. The upstream signatures identify CyberCircuits; they are not M5LEE or Yaesu signatures. This is not a guarantee of compatibility with modern Windows kernel security policies. The setup verifies signature/integrity and actual port health and never changes Windows security settings. No com0com source/binary code has been modified.
+com0com 3.0.0.0, the upstream signed x64 installer and its management/driver files, are bundled separately under their original GNU GPL terms. The bridge's GPLv3-or-later licence does not replace or upgrade com0com's upstream licence. Copyright remains with Vyacheslav Frolov and the respective com0com contributors; retain the individual upstream copyright and licence headers. The complete upstream source archive, GPL licence, original readme, origin URLs and file hashes are supplied in `vendor/com0com/` in both the installed payload and source release. See `vendor/com0com/ORIGIN.md`. The upstream signatures identify CyberCircuits; they are not M5LEE or Yaesu signatures. This is not a guarantee of compatibility with modern Windows kernel security policies. The setup verifies signature/integrity and actual port health and never changes Windows security settings. No com0com source/binary code has been modified.
 
 The runtime supports a hash-pinned WIRES-X 2.0.1.0 executable for the experimental observer. A hash identifies a supported local installation; it does not redistribute or license that executable. A different build is refused rather than silently treated as compatible.
 

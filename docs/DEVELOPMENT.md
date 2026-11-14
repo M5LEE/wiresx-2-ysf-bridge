@@ -18,7 +18,7 @@ Run from the repository root:
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\build.ps1
 ```
 
-The build first checks that the MIT licence, third-party notices and com0com licence/source files are present, even when `-SkipTests` is used. It verifies the upstream GPL text, readme and source archive against their recorded SHA256 hashes, and checks that the Yaesu independence and separate com0com licensing disclosures remain in the notices.
+The build first checks that the complete GNU GPLv3 licence, third-party notices and com0com licence/source files are present, even when `-SkipTests` is used. It verifies the original bridge licence text and the upstream com0com GPL text, readme and source archive against their recorded SHA256 hashes, and checks that the Yaesu independence and separate com0com licensing disclosures remain in the notices. With tests enabled, the distribution-notice regression suite also checks missing, truncated or altered licences and dependency notices before compilation.
 
 The build compiles the application and libraries with warnings treated as errors, copies runtime scripts, dependencies, `LICENSE` and `THIRD_PARTY_NOTICES.md` into `bin`, and generates `bin\artifact-hashes.json` from the compiled assemblies. It repeats the distribution-notice check against `bin`. Tests are enabled by default; their executables are written to `tests\bin`.
 
@@ -33,7 +33,7 @@ New-Item -ItemType Directory -Force .\dist
 makensis .\installer\installer.nsi
 ```
 
-NSIS writes the versioned Setup EXE to `dist`. Original code is MIT-licensed; the bundled com0com dependency retains its own licence and accompanying source. See [third-party notices](../THIRD_PARTY_NOTICES.md).
+NSIS writes the versioned Setup EXE to `dist`. Current original source is GPLv3-or-later; the bundled com0com dependency retains its own upstream licence and accompanying source. See [third-party notices](../THIRD_PARTY_NOTICES.md). Previously published alpha.11 and earlier downloads remain MIT-licensed for the original bridge code. A new release must use a new version/tag and include its matching source and licence; never overwrite those old downloads or claim their licence changed.
 
 The installer lists the required com0com files explicitly, so NSIS refuses to build if a listed file is absent. Before publishing, extract the installer or source ZIP into a temporary directory and check the directory that contains `LICENSE` and `vendor`:
 

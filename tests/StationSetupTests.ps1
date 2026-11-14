@@ -1,4 +1,5 @@
-# Copyright (c) 2026 M5LEE. MIT; see LICENSE.
+# Copyright (c) 2026 M5LEE.
+# SPDX-License-Identifier: GPL-3.0-or-later
 param([Parameter(Mandatory=$true)][string]$Bin)
 $ErrorActionPreference='Stop';$ProgressPreference='SilentlyContinue'
 $fixture=Join-Path (Split-Path $Bin) ('tests\station-ui-'+[Guid]::NewGuid().ToString('N'))

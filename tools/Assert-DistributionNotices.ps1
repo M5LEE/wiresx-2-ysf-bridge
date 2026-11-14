@@ -39,8 +39,12 @@ foreach($relative in @('LICENSE','THIRD_PARTY_NOTICES.md','vendor\com0com\ORIGIN
  }
 }
 $licence=Get-Content -LiteralPath (Join-Path $Root 'LICENSE') -Raw
-if($licence -notmatch '(?im)^\s*MIT License\s*$'){
- throw 'The original bridge contributions must retain their MIT licence.'
+# Pin the complete, unmodified GPLv3 text; allow Windows or Unix line endings.
+$normalized=$licence.Replace("`r`n","`n").Trim()+"`n"
+$sha=[Security.Cryptography.SHA256]::Create()
+try{$licenceHash=([BitConverter]::ToString($sha.ComputeHash([Text.Encoding]::UTF8.GetBytes($normalized)))).Replace('-','')}finally{$sha.Dispose()}
+if($licenceHash -cne '605E9047A563C5C8396FFB18232AA4304EC56586AEE537C45064C6FB425E44AD'){
+ throw 'The distribution must include the complete, unmodified GNU GPL version 3 licence.'
 }
 
 # Check disclosures within a paragraph, allowing formatting and wording edits.
@@ -56,11 +60,10 @@ if($yaesuNotice.Count -eq 0){
 }
 $com0comNotice=@($paragraphs|Where-Object {
  $_ -match '\bcom0com\b' -and $_ -match '\b(?:GPL|General Public Licen[cs]e)\b' -and
- $_ -match '\bMIT\b' -and
  $_ -match '\b(?:separate|separately)\b|\bnot\s+under\b|\bdoes\s+not\s+replace\b'
 })
 if($com0comNotice.Count -eq 0){
- throw 'THIRD_PARTY_NOTICES.md must retain the separate com0com GPL / bridge MIT disclosure.'
+ throw 'THIRD_PARTY_NOTICES.md must retain the separate upstream com0com GPL disclosure.'
 }
 
 Write-Output ('DISTRIBUTION_NOTICES_OK '+$Root)

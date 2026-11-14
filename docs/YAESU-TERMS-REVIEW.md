@@ -1,6 +1,6 @@
 # WIRES-X terms and distribution review
 
-Reviewed 13 November 2026 against bridge source commit `3325123e2d4c3ae44660b96a0a4b5007599e28fd`.
+Reviewed 13 November 2026 against bridge source commit `3325123e2d4c3ae44660b96a0a4b5007599e28fd`. Licence references below describe that MIT-licensed snapshot. Current source is GPLv3-or-later; the change does not alter this vendor/service-terms assessment or the licences of previously published releases.
 
 ## Result
 
