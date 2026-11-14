@@ -57,6 +57,17 @@ if(!$SkipTests){
  if($LASTEXITCODE){throw 'Receive accounting test compilation failed'}
  & (Join-Path $tests 'ReceiveAccountingTests.exe')
  if($LASTEXITCODE){throw 'Incoming capacity accounting regression failed'}
+ foreach($name in @('ReceiveBoundaryTests','ReceiveRecoveryTests','RoomProofTests','ReceiveSafetyTests','ReceiveTraceTests')){
+  & $csc /nologo /warnaserror+ ("/r:"+(Join-Path $bin 'BridgeProtocol.dll')) ("/out:"+(Join-Path $tests ($name+'.exe'))) (Join-Path $root ('tests\'+$name+'.cs'))
+  if($LASTEXITCODE){throw ($name+' compilation failed')}
+  & (Join-Path $tests ($name+'.exe'));if($LASTEXITCODE){throw ($name+' failed')}
+ }
+ & powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File (Join-Path $root 'tests\RoomProofAdapterTests.ps1') -AdapterPath (Join-Path $bin 'voice-adapter.ps1') -AssemblyPath (Join-Path $bin 'BridgeProtocol.dll')
+ if($LASTEXITCODE){throw 'Room-proof adapter recovery tests failed'}
+ foreach($name in @('RoomProofObserverTests','ProofPublicationTests')){
+  & powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File (Join-Path $root ('tests\'+$name+'.ps1')) -ObserverPath (Join-Path $bin 'observe-room-extended.ps1') -AssemblyPath (Join-Path $bin 'BridgeProtocol.dll')
+  if($LASTEXITCODE){throw ($name+' failed')}
+ }
  & $csc /nologo /warnaserror+ ("/r:"+(Join-Path $bin 'BridgeProtocol.dll')) ("/out:"+(Join-Path $tests 'CallsignMetadataTests.exe')) (Join-Path $root 'tests\CallsignMetadataTests.cs')
  if($LASTEXITCODE){throw 'Callsign metadata test compilation failed'}
  & (Join-Path $tests 'CallsignMetadataTests.exe')

@@ -16,17 +16,18 @@ namespace CumbriaCQ.Offline {
  public static class RoomLog {
   public static string CurrentRoom(string text){return Connection(text)[0];}
   public static string ConnectionKey(string text){return Connection(text)[1];}
+  public static bool HasBoundary(string text){return Connection(text)[2]!=null;}
   static string[] Connection(string text){
-   string room=null,key=null;
-   if(text==null)return new string[]{room,key};
+   string room=null,key=null,boundary=null;
+   if(text==null)return new string[]{room,key,boundary};
    foreach(string line in text.Split('\n')){
     var row=System.Text.RegularExpressions.Regex.Match(line,@"\A([0-9]{4}/[0-9]{2}/[0-9]{2}\s+[0-9]{2}:[0-9]{2}:[0-9]{2})\s+(.+)");
     if(!row.Success)continue;string message=row.Groups[2].Value.TrimEnd();
     var joined=System.Text.RegularExpressions.Regex.Match(message,@"\AConnected to .+?\(([0-9]{5})\)\.?\z",System.Text.RegularExpressions.RegexOptions.IgnoreCase);
-    if(joined.Success){room=joined.Groups[1].Value;key=row.Groups[1].Value+"|"+room;if(room=="00000"){room=null;key=null;}}
-    else if(System.Text.RegularExpressions.Regex.IsMatch(message,@"\A(?:Transceiver TX Stop\. Disconnect\.|Disconnect\b|Disconnected\b|return to room\b|Connecting(?:\(|\b))",System.Text.RegularExpressions.RegexOptions.IgnoreCase)){room=null;key=null;}
+    if(joined.Success){boundary="1";room=joined.Groups[1].Value;key=row.Groups[1].Value+"|"+room;if(room=="00000"){room=null;key=null;}}
+    else if(System.Text.RegularExpressions.Regex.IsMatch(message,@"\A(?:Transceiver TX Stop\. Disconnect\.|Disconnect\b|Disconnected\b|return to room\b|Connecting(?:\(|\b))",System.Text.RegularExpressions.RegexOptions.IgnoreCase)){boundary="1";room=null;key=null;}
    }
-   return new string[]{room,key};
+   return new string[]{room,key,boundary};
   }
   public static bool IsConnected(string text,string room){
    string connected=CurrentRoom(text);return connected!=null && (room==null || connected==room);
@@ -56,13 +57,13 @@ namespace CumbriaCQ.Offline {
    if(outbound)Send(b,YsfWire.Packet(gateway,source,YsfWire.HeaderFrame(source,gateway,sourceProfile.Uplink,sourceProfile.FrameTotal,dgId,true),sequence,true),now);
    if(outbound || inbound || dataTx)b.Serial.Add(Notice("00"));
    dataReady=false;dataTx=false;dataPhase=0;
-   pending.Clear();received.Clear();outbound=false;inbound=false;ending=false;rxEnding=false;synced=false;metadata=null;source=null;rxSource=null;rxVia=null;
+   pending.Clear();received.Clear();nextReceive=null;receiveRecovery=null;receivePaused=false;outbound=false;inbound=false;ending=false;rxEnding=false;synced=false;metadata=null;source=null;rxSource=null;rxVia=null;
    metadataProfile=null;sourceProfile=null;nativeFrames.Clear();nativeFrameOrder.Clear();
    return b;
   }
   readonly string gateway,idle,status;string receiveRoom,receiveRadioId;int dgId;bool allowZeroDg;readonly bool measuredFtm100Receive;
-  bool NoActiveStream { get {return !outbound && !inbound && !ending && !dataReady && !dataTx && pending.Count==0 && received.Count==0;} }
-  public bool CanChangeYsf(long now){return NoActiveStream && (metadata==null || (now>=metadataAt && now-metadataAt>1000));}
+  bool NoActiveStream { get {return !outbound && !inbound && nextReceive==null && receiveRecovery==null && !receivePaused && !ending && !dataReady && !dataTx && pending.Count==0 && received.Count==0;} }
+  public bool CanChangeYsf(long now){ExpireRecovery(now);return NoActiveStream && (metadata==null || (now>=metadataAt && now-metadataAt>1000));}
   public void SetYsfOptions(int nextDgId,bool nextAllowZeroDg){
    if(nextDgId<0 || nextDgId>127)throw new ArgumentException("YSF DG-ID");
    if(!NoActiveStream)throw new InvalidOperationException("Wait for the current over to finish");
@@ -77,6 +78,48 @@ namespace CumbriaCQ.Offline {
   }
   readonly Queue<byte[]> pending=new Queue<byte[]>();
   readonly Queue<byte[]> received=new Queue<byte[]>();
+  // At most one following over, sharing the existing four-frame receive budget.
+  sealed class FollowingReceive {
+   public string Caller,Via;public long Last;public int Expected=-1;public bool Ending;
+   public readonly Queue<byte[]> Voice=new Queue<byte[]>();
+  }
+  FollowingReceive nextReceive;
+  sealed class ReceiveRecovery {
+   public string Caller,Via;public long Until,Last;public int Expected,MaxForward;
+  }
+  ReceiveRecovery receiveRecovery;bool receivePaused;
+  // Only the adapter may resume this after fresh proof of the SAME connection.
+  // Pause retains bounded identity/sequence metadata, never queued audio.
+  public BridgeBatch PauseReceive(long now){
+   if(receivePaused)return new BridgeBatch();
+   ReceiveRecovery keep=inbound && !rxEnding && nextReceive==null && rxExpected>=0 && now>=rxLast && now-rxLast<=400?
+    new ReceiveRecovery{Caller=rxSource,Via=rxVia,Expected=rxExpected,Last=rxLast,Until=now+3000,MaxForward=32}:null;
+   BridgeBatch b=Stop(now);receiveRecovery=keep;receivePaused=true;Count("receive-proof-pauses");return b;
+  }
+  public void ResumeReceive(long now){
+   receivePaused=false;ExpireRecovery(now);
+  }
+  void ExpireRecovery(long now){
+   if(receiveRecovery!=null && (now<receiveRecovery.Last || now>receiveRecovery.Until))receiveRecovery=null;
+  }
+  void FinishReceive(BridgeBatch b,long now){
+   if(!inbound || !rxEnding || received.Count!=0 || now<rxDue)return;
+   inbound=false;synced=false;rxEnding=false;rxSource=null;rxVia=null;metadata=null;metadataProfile=null;b.Serial.Add(Notice("00"));
+   if(nextReceive!=null){
+    FollowingReceive next=nextReceive;nextReceive=null;
+    if(now-next.Last<=400){
+     inbound=true;rxSource=next.Caller;rxVia=next.Via;rxLast=next.Last;rxEnding=next.Ending;rxExpected=next.Expected;rxDue=now+100;rxCounter=measuredFtm100Receive?5:0;
+     while(next.Voice.Count>0)received.Enqueue(next.Voice.Dequeue());
+     b.Serial.Add(Notice("11"));Count("receive-headers");
+    }else Count("receive-pending-expired");
+   }
+  }
+  void ExpireReceive(BridgeBatch b,long now){
+   if(!inbound || now-rxLast<=400)return;
+   if(!rxEnding && rxExpected>=0 && now<=rxLast+1000)
+    receiveRecovery=new ReceiveRecovery{Caller=rxSource,Via=rxVia,Expected=rxExpected,Last=rxLast,Until=rxLast+1000,MaxForward=10};
+   received.Clear();rxEnding=true;rxDue=now;FinishReceive(b,now);
+  }
   readonly Dictionary<int,string> nativeFrames=new Dictionary<int,string>();
   readonly Queue<int> nativeFrameOrder=new Queue<int>();
   readonly Dictionary<string,long> recent=new Dictionary<string,long>();
@@ -136,18 +179,51 @@ namespace CumbriaCQ.Offline {
    if(info[3]!=2 || (info[4]!=dgId && !(allowZeroDg && info[4]==0)))throw new ArgumentException("Packet mode/DG-ID");
    return info;
   }
+  static bool ReceiveSequenceAllowed(int serial,int expected,long last,long now){
+   if(expected<0)return true;int ahead=(serial-expected)&127;
+   return ahead<=3 || (ahead<=10 && now>=last && now-last>=(ahead-2)*100);
+  }
+  public void ObserveBlockedReflector(byte[] packet){
+   if(receiveRecovery==null)return;
+   try{int[] info=PacketInfo(packet);if(info[0]==0 || info[0]==2 || (packet[34]&1)!=0){receiveRecovery=null;Count("receive-recovery-boundary");}}catch(ArgumentException){}
+  }
   public BridgeBatch OnReflector(byte[] packet,long now){
    BridgeBatch b=new BridgeBatch();int[] info;
    try{info=PacketInfo(packet);}catch(ArgumentException){Count("invalid-packet");return b;}
    string caller=System.Text.Encoding.ASCII.GetString(packet,14,10).TrimEnd(' '),via=System.Text.Encoding.ASCII.GetString(packet,4,10).TrimEnd(' ');
+   if(receivePaused){ObserveBlockedReflector(packet);Count("receive-proof-gated");return b;}
    if(!Call(caller) || !Call(via) || outbound || dataReady || dataTx || (caller==gateway && via==gateway) || Seen("network:"+Digest(packet),now)){Count(caller==gateway && via==gateway?"own-loop":"receive-suppressed");return b;}
+   ExpireReceive(b,now);
+   if(inbound && rxEnding && info[0]==0){
+    if(nextReceive==null){nextReceive=new FollowingReceive{Caller=caller,Via=via,Last=now};Count("receive-header-deferred");}
+    else Count("receive-header-pending");
+    return b;
+   }
+   if(nextReceive!=null){
+    if(caller!=nextReceive.Caller || via!=nextReceive.Via){Count("receive-source-mismatch");return b;}
+    if(info[0]==1 && !nextReceive.Ending){
+     int serial=packet[34]>>1;if(!ReceiveSequenceAllowed(serial,nextReceive.Expected,nextReceive.Last,now)){Count("sequence-gap");return b;}
+     if(received.Count+nextReceive.Voice.Count>=4){nextReceive.Expected=(serial+1)&127;nextReceive.Last=now;nextReceive.Ending=(packet[34]&1)!=0;Count("receive-queue-full");return b;}
+     nextReceive.Voice.Enqueue(YsfWire.ReceiveVoice(packet,dgId,allowZeroDg));nextReceive.Expected=(serial+1)&127;nextReceive.Last=now;nextReceive.Ending=(packet[34]&1)!=0;Count("receive-voice-admitted");
+    }else if(info[0]==2){nextReceive.Ending=true;nextReceive.Last=now;}
+    else Count("receive-ending");
+    return b;
+   }
+   if(info[0]==0 || info[0]==2)receiveRecovery=null;
+   if(info[0]==1 && !inbound && receiveRecovery!=null){
+    ReceiveRecovery saved=receiveRecovery;int serial=packet[34]>>1,ahead=(serial-saved.Expected)&127;
+    if(now>saved.Until || now<saved.Last)receiveRecovery=null;
+    else if(caller==saved.Caller && via==saved.Via && ahead<=saved.MaxForward && (ahead<=3 || now-saved.Last>=(ahead-2)*100)){
+     receiveRecovery=null;inbound=true;synced=false;rxEnding=false;rxSource=caller;rxVia=via;rxDue=now+100;rxLast=now;rxCounter=measuredFtm100Receive?5:0;rxExpected=serial;metadata=null;metadataProfile=null;b.Serial.Add(Notice("11"));Count("receive-resumed");
+    }
+   }
    if(info[0]==1 && !inbound){Count("missing-header");return b;}
    if(info[0]==0 && !inbound){
     inbound=true;synced=false;rxEnding=false;rxSource=caller;rxVia=via;rxDue=now+100;rxLast=now;rxCounter=measuredFtm100Receive?5:0;rxExpected=-1;metadata=null;b.Serial.Add(Notice("11"));Count("receive-headers");
    }else if(info[0]==1 && inbound && !rxEnding && caller==rxSource && via==rxVia){
-    // Preserve admission/pacing exactly; never silently discard capacity losses.
-    if(received.Count>=4){Count("receive-queue-full");return b;}
-    int serial=packet[34]>>1;if(rxExpected>=0 && ((serial-rxExpected)&127)>3){Count("sequence-gap");return b;}
+    // A known local capacity drop advances ingress, not playout or audio.
+    int serial=packet[34]>>1;if(!ReceiveSequenceAllowed(serial,rxExpected,rxLast,now)){Count("sequence-gap");return b;}
+    if(received.Count>=4){rxExpected=(serial+1)&127;rxLast=now;if((packet[34]&1)!=0)rxEnding=true;Count("receive-queue-full");return b;}
     received.Enqueue(YsfWire.ReceiveVoice(packet,dgId,allowZeroDg));rxExpected=(serial+1)&127;rxLast=now;if((packet[34]&1)!=0)rxEnding=true;Count("receive-voice-admitted");
    }else if(info[0]==2 && inbound && caller==rxSource && via==rxVia){
     rxEnding=true;rxLast=now;
@@ -191,7 +267,7 @@ namespace CumbriaCQ.Offline {
     }
     string payloadDigest=Digest(payload),seenDigest;
     if(outbound && nativeFrames.TryGetValue(counter,out seenDigest) && seenDigest==payloadDigest){Count("transmit-duplicate");return b;}
-    if(!outbound){source=metadata;sourceProfile=metadataProfile;outbound=true;expected=counter;sequence=1;fn=0;nextDue=now;lastPlayout=now;Count("transmit-profile-ft"+sourceProfile.FrameTotal);if(sourceProfile.Remarks.Trim().Length>0)Count("transmit-native-remarks-preserved");Send(b,YsfWire.Packet(gateway,source,YsfWire.HeaderFrame(source,gateway,sourceProfile.Uplink,sourceProfile.FrameTotal,dgId,false),0,false),now);}
+    if(!outbound){receiveRecovery=null;source=metadata;sourceProfile=metadataProfile;outbound=true;expected=counter;sequence=1;fn=0;nextDue=now;lastPlayout=now;Count("transmit-profile-ft"+sourceProfile.FrameTotal);if(sourceProfile.Remarks.Trim().Length>0)Count("transmit-native-remarks-preserved");Send(b,YsfWire.Packet(gateway,source,YsfWire.HeaderFrame(source,gateway,sourceProfile.Uplink,sourceProfile.FrameTotal,dgId,false),0,false),now);}
     // A bounded forward loss must not lock out the remainder of an over.
     // Preserve duplicate/backward/misaligned rejection; do not invent audio.
     if(counter!=expected){
@@ -228,10 +304,8 @@ namespace CumbriaCQ.Offline {
   }
   public BridgeBatch Tick(long now){
    BridgeBatch b=ControlTick(now);
-   if(inbound && now-rxLast>400){received.Clear();rxEnding=true;rxDue=now;}
-   if(inbound && rxEnding && received.Count==0 && now>=rxDue){
-    inbound=false;synced=false;rxEnding=false;rxSource=null;rxVia=null;metadata=null;metadataProfile=null;b.Serial.Add(Notice("00"));
-   }
+   ExpireRecovery(now);
+   ExpireReceive(b,now);FinishReceive(b,now);
    if(inbound && now>=rxDue){
     if(!synced){
      synced=true;b.Serial.Add(Notice("31"));
@@ -265,7 +339,75 @@ namespace CumbriaCQ.Offline {
    return b;
   }
  }
- public sealed class NativeLogView { public string Text; public int Lines; public bool Partial; }
+ public static class RoomProofFile {
+  // Replacement alone can race a Windows name lookup. Coordinate just the
+  // small proof-file transaction; never keep this lock across a native read.
+  static System.Threading.Mutex OpenLock(string path){
+   byte[] name;
+   using(var hash=System.Security.Cryptography.SHA256.Create())name=hash.ComputeHash(Encoding.UTF8.GetBytes(System.IO.Path.GetFullPath(path).ToUpperInvariant()));
+   return new System.Threading.Mutex(false,"Local\\M5LEE-RoomProof-"+BitConverter.ToString(name).Replace("-",""));
+  }
+  static void Enter(System.Threading.Mutex gate){
+   try{if(!gate.WaitOne(20))throw new System.IO.IOException("RoomProofBusy");}catch(System.Threading.AbandonedMutexException){}
+  }
+  public static void Publish(string path,string json){
+   if(json==null || Encoding.UTF8.GetByteCount(json)>65536)throw new ArgumentException("RoomProofSize");
+   using(var gate=OpenLock(path)){
+    Enter(gate);string temp=path+"."+Guid.NewGuid().ToString("N")+".pending";
+    try{
+     System.IO.File.WriteAllText(temp,json,new UTF8Encoding(false));
+     if(System.IO.File.Exists(path))System.IO.File.Replace(temp,path,null);else System.IO.File.Move(temp,path);
+    }finally{try{if(System.IO.File.Exists(temp))System.IO.File.Delete(temp);}finally{gate.ReleaseMutex();}}
+   }
+  }
+  public static string Read(string path){
+   for(int attempt=0;;attempt++){
+    try{
+     using(var gate=OpenLock(path)){
+      Enter(gate);
+      try{using(var file=new System.IO.FileStream(path,System.IO.FileMode.Open,System.IO.FileAccess.Read,System.IO.FileShare.ReadWrite|System.IO.FileShare.Delete)){
+       if(file.Length>65536)throw new ArgumentException("RoomProofSize");
+       using(var reader=new System.IO.StreamReader(file))return reader.ReadToEnd();
+      }}finally{gate.ReleaseMutex();}
+     }
+    }catch(System.IO.IOException){if(attempt>=2)throw;}
+    catch(UnauthorizedAccessException){if(attempt>=2)throw;}
+    System.Threading.Thread.Sleep(5);
+   }
+  }
+ }
+ public sealed class NativeLogView { public string Text; public int Lines; public int TotalLines; public bool Partial; }
+ // Continuity is proven from overlapping complete native log lines, not assumed
+ // from a room number or the log's second-resolution connection timestamp.
+ public sealed class RoomProofTracker {
+  readonly string owner=Guid.NewGuid().ToString("N");long generation;string marker="";string[] previous;int previousTotal;
+  public string RoomId { get; private set; }
+  public string ConnectionKey { get; private set; }
+  public void Observe(NativeLogView view){
+   if(view==null || view.Partial || view.Text==null || view.Lines<1 || view.Lines>256 || view.TotalLines<view.Lines)throw new ArgumentException("IncompleteNativeLog");
+   string[] split=view.Text.Split('\n');
+   if(split.Length!=view.Lines+1 || split[split.Length-1]!="")throw new ArgumentException("NativeLogShape");
+   string[] lines=new string[view.Lines];Array.Copy(split,lines,lines.Length);
+   int first=view.TotalLines-lines.Length;bool continuous=previous!=null && view.TotalLines>=previousTotal;
+   int added=first;
+   if(continuous){
+    int oldFirst=previousTotal-previous.Length,end=previousTotal-1;
+    continuous=first>=oldFirst && first<end;
+    if(continuous){
+     for(int i=first;i<end;i++)if(lines[i-first]!=previous[i-oldFirst]){continuous=false;break;}
+     added=end;
+     if(continuous && lines[end-first]==previous[previous.Length-1])added++;
+    }
+   }
+   string appended=continuous?string.Join("\n",lines,added-first,lines.Length-(added-first)):view.Text;
+   if(!continuous)marker="";
+   string text=marker+view.Text,room=RoomLog.CurrentRoom(text),key=RoomLog.ConnectionKey(text);
+   if(!continuous || RoomLog.HasBoundary(appended) || room!=RoomId)generation++;
+   RoomId=room;ConnectionKey=key==null?null:key+"|"+owner+"|"+generation;
+   marker=key==null?"":key.Split('|')[0]+" Connected to CURRENT("+room+").\n";
+   previous=lines;previousTotal=view.TotalLines;
+  }
+ }
  public static class NativeLogTail {
   public delegate bool Child(IntPtr h,IntPtr p);
   [DllImport("user32.dll")] static extern bool EnumChildWindows(IntPtr h,Child f,IntPtr p);
@@ -280,7 +422,7 @@ namespace CumbriaCQ.Offline {
    if(log==IntPtr.Zero)throw new InvalidOperationException("DiagnosticControlUnavailable");return ReadEdit(log);
   }
   public static NativeLogView ReadEdit(IntPtr edit){
-   int total=Query(edit,0xBA,0,IntPtr.Zero),first=Math.Max(0,total-256);var text=new StringBuilder();var clock=Stopwatch.StartNew();var view=new NativeLogView();
+   int total=Query(edit,0xBA,0,IntPtr.Zero),first=Math.Max(0,total-256);var text=new StringBuilder();var clock=Stopwatch.StartNew();var view=new NativeLogView{TotalLines=total};
    IntPtr buffer=Marshal.AllocHGlobal(2048);
    try{for(int line=first;line<total;line++){
      if(clock.ElapsedMilliseconds>=1500){view.Partial=true;break;}

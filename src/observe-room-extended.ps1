@@ -17,24 +17,25 @@ public static class OwnRoomRead {
  [DllImport("user32.dll",CharSet=CharSet.Unicode)] public static extern IntPtr SendMessageTimeout(IntPtr h,uint message,UIntPtr count,StringBuilder text,uint flags,uint timeout,out UIntPtr result);
 }
 '@
-$watch=[Diagnostics.Stopwatch]::StartNew();$lastConnectionLine=''
+$watch=[Diagnostics.Stopwatch]::StartNew();$tracker=[CumbriaCQ.Offline.RoomProofTracker]::new();$publicationFailures=0
 while($UntilStopped -or $watch.Elapsed.TotalSeconds -lt $Seconds){
- $state=[pscustomobject]@{Tag=$Tag;AppPid=$AppPid;Connected=$false;RoomId=$null;ControlId=1014;Method='NativeMainLog';ObserverPid=$PID;Utc=[DateTime]::UtcNow.ToString('o');Error=$null}
+ $state=[pscustomobject]@{Tag=$Tag;AppPid=$AppPid;AppStartUtc=$StartUtc;Connected=$false;RoomId=$null;ConnectionKey=$null;RecoveryKey=$null;ControlId=1014;Method='NativeMainLog';ObserverPid=$PID;Utc=[DateTime]::UtcNow.ToString('o');Error=$null;ErrorDetail=$null;ErrorType=$null;PublicationFailures=$publicationFailures}
+ $stage='NativeBinding';$view=$null
  try{
   $p=Get-Process -Id $AppPid
   if($p.StartTime.ToUniversalTime().ToString('o') -cne $StartUtc -or !$p.MainWindowHandle){throw 'Native binding unavailable'}
+  $stage='NativeLogRead'
   $view=[CumbriaCQ.Offline.NativeLogTail]::ReadNative($p.MainWindowHandle)
   if($view.Partial){throw 'PartialNativeLogRead'}
-  $logText=$lastConnectionLine+$view.Text
-  $state.RoomId=[CumbriaCQ.Offline.RoomLog]::CurrentRoom($logText)
-  $state|Add-Member NoteProperty AppStartUtc $StartUtc
-  $state|Add-Member NoteProperty ConnectionKey ([CumbriaCQ.Offline.RoomLog]::ConnectionKey($logText))
-  $lastConnectionLine=if($state.RoomId){$state.ConnectionKey.Split('|')[0]+' Connected to CURRENT('+$state.RoomId+").`n"}else{''}
-  $state.Connected=($null -ne $state.RoomId);$view.Text=$null
- }catch{$state.Error=$_.Exception.GetType().Name}
- $path=Join-Path $root ('room-proof-'+$Tag+'.json');$temp=$path+'.extended-pending'
- try{$state|ConvertTo-Json -Compress|Set-Content $temp;Move-Item -Force $temp $path}
- catch{Remove-Item $temp -Force -ErrorAction SilentlyContinue}
+  $tracker.Observe($view);$state.RoomId=$tracker.RoomId;$state.ConnectionKey=$tracker.ConnectionKey
+  $state.Connected=($null -ne $state.RoomId)
+ }catch{
+  $state.Error=$stage;$errorBase=$_.Exception.GetBaseException();$state.ErrorType=$errorBase.GetType().Name
+  $state.ErrorDetail=if($errorBase.Message -cin @('ReadTimeout','ReadRange','MissingWindow','DiagnosticControlUnavailable','LineRange','PartialNativeLogRead','IncompleteNativeLog','NativeLogShape')){$errorBase.Message}else{'UnclassifiedFailure'}
+  if($stage -ceq 'NativeLogRead'){$state.RecoveryKey=$tracker.ConnectionKey}
+ }finally{if($view){$view.Text=$null}}
+ $path=Join-Path $root ('room-proof-'+$Tag+'.json')
+ try{[CumbriaCQ.Offline.RoomProofFile]::Publish($path,($state|ConvertTo-Json -Compress))}catch{$publicationFailures++}
  # A temporary read failure closes forwarding but must not kill a healthy bridge.
  if(Test-Path (Join-Path $root ('observer-stop-'+$Tag+'.flag'))){break}
  Start-Sleep -Seconds 2

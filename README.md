@@ -1,6 +1,6 @@
 # WiresX 2 YSF Bridge
 
-**By M5LEE · 0.1.0-alpha.10 · Free, experimental Windows software**
+**By M5LEE · 0.1.0-alpha.11 · Free, experimental Windows software**
 
 Connect the room currently linked in **official WIRES-X** to a **YSF reflector**. WiresX 2 YSF Bridge carries digital voice and supported caller information between the two networks, using your existing WIRES-X installation and genuine HRI-200.
 
@@ -10,13 +10,15 @@ Connect the room currently linked in **official WIRES-X** to a **YSF reflector**
 
 | File | Download |
 |---|---|
-| Windows x64 installer | [Setup.exe](https://github.com/M5LEE/wiresx-2-ysf-bridge/releases/download/v0.1.0-alpha.10/WiresX-2-YSF-Bridge-0.1.0-alpha.10-Setup.exe) |
-| Alpha.10 source snapshot | [Source.zip](https://github.com/M5LEE/wiresx-2-ysf-bridge/releases/download/v0.1.0-alpha.10/WiresX-2-YSF-Bridge-0.1.0-alpha.10-Source.zip) |
-| File checksums | [SHA256SUMS.txt](https://github.com/M5LEE/wiresx-2-ysf-bridge/releases/download/v0.1.0-alpha.10/WiresX-2-YSF-Bridge-0.1.0-alpha.10-SHA256SUMS.txt) |
+| Windows x64 installer | [Setup.exe](https://github.com/M5LEE/wiresx-2-ysf-bridge/releases/download/v0.1.0-alpha.11/WiresX-2-YSF-Bridge-0.1.0-alpha.11-Setup.exe) |
+| Alpha.11 source snapshot | [Source.zip](https://github.com/M5LEE/wiresx-2-ysf-bridge/releases/download/v0.1.0-alpha.11/WiresX-2-YSF-Bridge-0.1.0-alpha.11-Source.zip) |
+| File checksums | [SHA256SUMS.txt](https://github.com/M5LEE/wiresx-2-ysf-bridge/releases/download/v0.1.0-alpha.11/WiresX-2-YSF-Bridge-0.1.0-alpha.11-SHA256SUMS.txt) |
 
-[Release page](https://github.com/M5LEE/wiresx-2-ysf-bridge/releases/tag/v0.1.0-alpha.10) · [Release notes](docs/RELEASE-alpha.10.md)
+[Release page](https://github.com/M5LEE/wiresx-2-ysf-bridge/releases/tag/v0.1.0-alpha.11) · [Release notes](docs/RELEASE-alpha.11.md)
 
 Downloads currently require signing in to a GitHub account with access to this private repository.
+
+**Alpha.11 adds receive-recovery fixes validated by automated tests. Live listening and extended operation of these changes remain pending; this is not a beta release.** The previous [alpha.10 release](https://github.com/M5LEE/wiresx-2-ysf-bridge/releases/tag/v0.1.0-alpha.10) remains available.
 
 ## Features
 
@@ -26,6 +28,7 @@ Downloads currently require signing in to a GitHub account with access to this p
 - Change the YSF destination between overs with **Apply YSF room**, without restarting WIRES-X.
 - Separate active and saved YSF destination display, with old-room logout and failed-switch recovery.
 - Caller callsign and supported C4FM metadata forwarding.
+- Back-to-back receive-over handling and bounded recovery after temporary interruptions, with no replacement audio.
 - Windows launcher with room, connection and tray status.
 - Optional automatic startup when you sign in to Windows.
 - Automatic virtual-port setup using the bundled com0com dependency.
@@ -44,7 +47,7 @@ This is an independent project, not an official Yaesu product. WIRES-X software 
 
 ## Installation and first-time setup
 
-1. Download and run **`WiresX-2-YSF-Bridge-0.1.0-alpha.10-Setup.exe`** from the release page. Leave **Set up my bridge** selected on the final page.
+1. Download and run **`WiresX-2-YSF-Bridge-0.1.0-alpha.11-Setup.exe`** from the release page. Leave **Set up my bridge** selected on the final page.
 2. Enter your **YSF bridge callsign** and select the **YSF destination room**. Check the destination's required DG-ID.
 3. Enable **Advanced setup** and choose **Automatic setup**. After confirmation, setup detects the HRI-200 and configures the virtual-port connection. A compatible existing connection is reused.
 4. If no valid radio profile is present, connect and power on your FTM-100, then choose **Create connection profile** under Advanced setup. The capture takes about two minutes, may close and reopen WIRES-X, and blocks PTT/voice during capture. Reopen Station setup afterwards to check the result.
@@ -90,6 +93,7 @@ See [compatibility and testing](docs/VERIFICATION.md) for the current release's 
 
 - [Building from source](docs/DEVELOPMENT.md)
 - [C4FM metadata format](docs/C4FM-METADATA-PROFILES.md)
+- [Receive recovery and connection safeguards](docs/RECEIVE-RECOVERY.md)
 - [Third-party notices](THIRD_PARTY_NOTICES.md)
 
 ## Licence and optional support

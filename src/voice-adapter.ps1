@@ -38,7 +38,7 @@ $lastNativeVoice=-10000L;$lastYsfVoice=-10000L;$lastYsfCheck=-1000L;$ysfLastRequ
 $receiveAny=if($address.AddressFamily -eq [Net.Sockets.AddressFamily]::InterNetworkV6){[Net.IPAddress]::IPv6Any}else{[Net.IPAddress]::Any}
 $poll=[Text.Encoding]::ASCII.GetBytes('YSFP'+$station.Gateway.PadRight(10));$unlink=[Text.Encoding]::ASCII.GetBytes('YSFU'+$station.Gateway.PadRight(10))
 $configured=$false;$roomVerified=$false;$linkHealthy=$false;$wasActive=$false;$nodeSaved=$false;$proofReason='not-yet-read'
-$currentRoom=$null;$connectionKey=$null;$roomBarrier=$null
+$currentRoom=$null;$connectionKey=$null;$roomBarrier=$null;$proofPaused=$false
 $resetGuard=[CumbriaCQ.Offline.ConfigurationResetGuard]::new()
 $seen=@{};$hardware=@{};$wireOut=@{};$networkOut=@{};$dropped=@{};$headerShapes=@{};$counts=@{Polls=0;PollReplies=0;ValidOwnRoom=0;OtherOrInvalidRoom=0;NetworkData=0;GateDrops=0;PhysicalControlsBlocked=0;Configurations=0}
 $failure=$null;$nextPoll=0;$lastStopCheck=0;$lastProofCheck=-1000;$clock=$null;$cpuStart=0
@@ -92,23 +92,31 @@ try{
  while($UntilStopped -or $clock.Elapsed.TotalSeconds -lt $Seconds){
   $now=$clock.ElapsedMilliseconds
   if($now-$lastProofCheck -ge 1000){
-   $lastProofCheck=$now;$roomVerified=$false;$proofReason='missing-or-invalid';$nextRoom=$null;$nextKey=$null
+   $lastProofCheck=$now;$roomVerified=$false;$proofReason='missing-or-invalid';$nextRoom=$null;$nextKey=$null;$proofUncertain=$false
    try{
-    $proof=Get-Content (Join-Path $root ('room-proof-'+$Tag+'.json')) -Raw -ErrorAction Stop|ConvertFrom-Json
+    $proof=[CumbriaCQ.Offline.RoomProofFile]::Read((Join-Path $root ('room-proof-'+$Tag+'.json')))|ConvertFrom-Json
     $age=([DateTime]::UtcNow-[DateTime]::Parse($proof.Utc).ToUniversalTime()).TotalSeconds
     $app=Get-Process Wires-X -ErrorAction Stop
-    $roomVerified=($proof.Tag -ceq $Tag -and $proof.Method -ceq 'NativeMainLog' -and $proof.ControlId -eq 1014 -and $proof.AppPid -eq $app.Id -and $proof.AppStartUtc -ceq $app.StartTime.ToUniversalTime().ToString('o') -and $proof.Connected -eq $true -and $proof.RoomId -cmatch '^[0-9]{5}$' -and $proof.RoomId -cne '00000' -and $proof.ConnectionKey -and $proof.ConnectionKey -cne $roomBarrier -and $age -ge 0 -and $age -le 8 -and !$proof.Error)
+    $bound=($proof.Tag -ceq $Tag -and $proof.Method -ceq 'NativeMainLog' -and $proof.ControlId -eq 1014 -and $proof.AppPid -eq $app.Id -and $proof.AppStartUtc -ceq $app.StartTime.ToUniversalTime().ToString('o') -and $age -ge 0 -and $age -le 8)
+    $roomVerified=($bound -and $proof.Connected -eq $true -and $proof.RoomId -cmatch '^[0-9]{5}$' -and $proof.RoomId -cne '00000' -and $proof.ConnectionKey -and $proof.ConnectionKey -cne $roomBarrier -and !$proof.Error)
+    $proofUncertain=($bound -and !$proof.Connected -and $proof.Error -ceq 'NativeLogRead' -and $connectionKey -and $connectionKey -cne $roomBarrier -and $proof.RecoveryKey -ceq $connectionKey)
     if($roomVerified){$nextRoom=$proof.RoomId;$nextKey=$proof.ConnectionKey}
     $proofReason=if($roomVerified){'verified'}elseif($age -gt 8 -or $age -lt 0){'stale'}elseif($proof.AppPid -ne $app.Id){'different-process'}elseif($proof.Error){'observer-error'}else{'not-connected-or-untrusted-proof'}
    }catch{}
-   if($nextKey -cne $connectionKey){
+   if($proofUncertain){
+    if(!$proofPaused){Send-Batch ($engine.PauseReceive($now)) $true;$proofPaused=$true}
+   }elseif($nextKey -cne $connectionKey -or !$roomVerified){
     Send-Batch ($engine.Stop($now)) $true
     Send-Batch ($engine.SetConnectedRoom($nextRoom,$now)) $true
-    $currentRoom=$nextRoom;$connectionKey=$nextKey
+    $currentRoom=$nextRoom;$connectionKey=$nextKey;$proofPaused=$false
+   }elseif($proofPaused){
+    if($configured -and $ForwardVoice -and $ysfReload.IsHealthy($now)){$engine.ResumeReceive($now)}else{Send-Batch ($engine.Stop($now)) $true}
+    $proofPaused=$false
    }
   }
   if($now -ge $nextPoll){if($ysfReload.CanPoll){try{$null=$socket.Send($poll,$poll.Length);$counts.Polls++}catch{if($_.Exception.GetBaseException() -isnot [Net.Sockets.SocketException]){throw};$ysfReload.ObserveTransportError();Count-Key $dropped 'ysf-poll-socket-error'};$nextPoll=$now+5000}}
   $linkHealthy=$ysfReload.IsHealthy($now)
+  if($proofPaused -and (!$configured -or !$linkHealthy -or !$ForwardVoice -or $roomBarrier -ceq $connectionKey)){Send-Batch ($engine.Stop($now)) $true;$proofPaused=$false}
   if($virt.BytesToRead -gt 0){
    foreach($b in $hostParser.Feed([Text.Encoding]::ASCII.GetBytes($virt.ReadExisting()))){
     # Serial ACK/dispatch can span a playout deadline within one parsed batch.
@@ -155,12 +163,12 @@ try{
    elseif($packet.Length -eq 155 -and [Text.Encoding]::ASCII.GetString($packet,0,4) -eq 'YSFD'){
     $lastYsfVoice=$now
     $counts.NetworkData++
-    if($configured -and $roomVerified -and $linkHealthy -and $ForwardVoice){Send-Batch ($engine.OnReflector($packet,$now))}else{$counts.GateDrops++}
+    if($configured -and $roomVerified -and $linkHealthy -and $ForwardVoice){Send-Batch ($engine.OnReflector($packet,$now))}else{$counts.GateDrops++;$engine.ObserveBlockedReflector($packet)}
    }
   }
   $now=$clock.ElapsedMilliseconds
   $active=$configured -and $roomVerified -and $linkHealthy -and $ForwardVoice
-  if($wasActive -and !$active){Send-Batch ($engine.Stop($now)) $true}
+  if($wasActive -and !$active -and !$proofPaused){Send-Batch ($engine.Stop($now)) $true}
   Send-Batch ($engine.ControlTick($now))
   if($active){Send-Batch ($engine.Tick($now))};$wasActive=$active
   Update-YsfApply $clock.ElapsedMilliseconds
