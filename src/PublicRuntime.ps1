@@ -1,4 +1,5 @@
-# Copyright (c) 2026 M5LEE. MIT; see LICENSE. No vendor software or identities included.
+# Copyright (c) 2026 M5LEE. No vendor software or identities included.
+# SPDX-License-Identifier: GPL-3.0-or-later
 $script:Bin=$PSScriptRoot
 $script:Root=Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) 'M5LEE\WIRESX-to-YSF-Brtidge'
 $script:SupportedNativeHash='8F05DC26794144438566B880CE775F5178D62EB3C4DEB8C053089216342BC671'

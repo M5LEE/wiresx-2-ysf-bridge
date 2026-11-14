@@ -16,7 +16,7 @@ Connect the room currently linked in **official WIRES-X** to a **YSF reflector**
 
 [Release page](https://github.com/M5LEE/wiresx-2-ysf-bridge/releases/tag/v0.1.0-alpha.10) · [Release notes](docs/RELEASE-alpha.10.md)
 
-Downloads currently require signing in to a GitHub account with access to this private repository.
+Downloads are public; no GitHub sign-in is required.
 
 ## Features
 
@@ -41,6 +41,17 @@ Downloads currently require signing in to a GitHub account with access to this p
 - Administrator approval when requested. Use the same Windows account for setup, startup configuration and removal.
 
 This is an independent project, not an official Yaesu product. WIRES-X software and Yaesu drivers are obtained separately.
+
+## Testing with an existing radio-based WIRES-X bridge
+
+For the [alpha.11 tester build](https://github.com/M5LEE/wiresx-2-ysf-bridge/releases/tag/v0.1.0-alpha.11), keep your existing WIRES-X account, room and radio settings as they are. Once this software bridge's setup is complete:
+
+1. **Turn off WIRES-X's separate automatic startup**, including any WIRES-X/YMLAN startup entry that launches it independently of the bridge.
+2. **Close WIRES-X completely before disconnecting the radio.**
+3. Turn the radio off and unplug its connection to the **HRI-200**. Leave the HRI-200 powered and connected to the PC; do not unplug its USB connection.
+4. Open **WiresX 2 YSF Bridge** and select **Start bridge**. The bridge prepares its connection and **automatically launches WIRES-X**. Do not launch WIRES-X separately; allow several minutes for login.
+
+**First-time testers:** complete the setup below first, including your YSF callsign/destination and a valid saved connection profile. If you need to create a profile, keep the supported radio connected and on for that capture, then follow the shutdown/disconnection steps above. An existing radio-based WIRES-X installation alone does not supply a saved bridge profile.
 
 ## Installation and first-time setup
 
@@ -94,7 +105,9 @@ See [compatibility and testing](docs/VERIFICATION.md) for the current release's 
 
 ## Licence and optional support
 
-Copyright (c) **2026 M5LEE**. Original contributions are under the [MIT licence](LICENSE), **AS IS and without warranty**. Bundled com0com remains separately GPL licensed; third-party rights remain with their owners. WIRES-X/HRI/Yaesu notices are in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+Copyright (c) **2026 M5LEE**. The current source's original contributions are licensed under the [GNU General Public License, version 3 or later](LICENSE) (`GPL-3.0-or-later`), **AS IS and without warranty**. You may redistribute and modify them under those terms. Bundled com0com retains its separate upstream licence; third-party rights remain with their owners. See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+
+**Earlier releases:** alpha.11 and earlier published installers, source archives and version tags retain their original MIT terms for the bridge code. This source-licence change does not withdraw those permissions or replace the existing downloads.
 
 Donations to the **CumbriaCQ network** are entirely optional, not licence fees or feature unlocks:
 

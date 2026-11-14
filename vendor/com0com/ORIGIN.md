@@ -1,6 +1,6 @@
 # Bundled com0com dependency
 
-com0com 3.0.0.0 is an independent GPL-licensed component, not M5LEE code and not Yaesu software. The bridge's MIT licence does not replace its licence. The GPL licence and complete unmodified upstream source archive are supplied alongside the dependency.
+com0com 3.0.0.0 is an independent GPL-licensed component, not M5LEE code and not Yaesu software. The bridge's GPLv3-or-later licence does not replace or upgrade its original upstream licence. The upstream GPL licence and complete unmodified upstream source archive are supplied alongside the dependency.
 
 ## Upstream downloads
 

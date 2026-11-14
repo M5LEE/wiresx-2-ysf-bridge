@@ -1,4 +1,5 @@
-# Copyright (c) 2026 M5LEE. MIT. Explicit, local-only migration; never executes source scripts.
+# Copyright (c) 2026 M5LEE. Explicit, local-only migration; never executes source scripts.
+# SPDX-License-Identifier: GPL-3.0-or-later
 function Read-ExistingFile([string]$Source,[string]$Relative,[int]$Limit=1048576){
  $base=[IO.Path]::GetFullPath($Source).TrimEnd('\');$path=[IO.Path]::GetFullPath((Join-Path $base $Relative))
  if(!$path.StartsWith($base+'\',[StringComparison]::OrdinalIgnoreCase)){throw 'ImportPathOutsideSelectedFolder'}

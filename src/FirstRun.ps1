@@ -1,4 +1,5 @@
-# Copyright (c) 2026 M5LEE. MIT. Bundled com0com remains separately GPL licensed.
+# Copyright (c) 2026 M5LEE. Bundled com0com retains its upstream GPL licence.
+# SPDX-License-Identifier: GPL-3.0-or-later
 # Dot-sourcing defines functions only. Provisioning needs an explicit UI action.
 $script:ConnectionBin=$PSScriptRoot
 function ConvertFrom-PairList([string]$text){

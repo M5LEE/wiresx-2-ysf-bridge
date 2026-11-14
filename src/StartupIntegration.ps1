@@ -1,4 +1,5 @@
-# Copyright (c) 2026 M5LEE. MIT; see LICENSE.
+# Copyright (c) 2026 M5LEE.
+# SPDX-License-Identifier: GPL-3.0-or-later
 param([ValidateSet('Status','Enable','Disable')][string]$Action='Status')
 $ErrorActionPreference='Stop';$ProgressPreference='SilentlyContinue'
 . (Join-Path $PSScriptRoot 'PublicRuntime.ps1')

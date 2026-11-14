@@ -47,7 +47,8 @@ def svg(kind):
   badge=f'<circle cx="201" cy="200" r="50" fill="{NAVY}"/><g fill="{GOLD}">{teeth}<circle cx="201" cy="200" r="35"/></g><circle cx="201" cy="200" r="17" fill="{NAVY}"/><circle cx="201" cy="200" r="6" fill="{WHITE}"/>'
  if kind=='setup':badge=f'<circle cx="201" cy="200" r="50" fill="{NAVY}"/><circle cx="201" cy="200" r="43" fill="{CYAN}"/><path d="M201 174V211M185 199L201 215L217 199" stroke="{NAVY}" stroke-width="11" stroke-linecap="round" stroke-linejoin="round" fill="none"/>'
  return f'''<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-label="M5LEE radio link {kind}">
-<!-- Copyright (c) 2026 M5LEE. Original artwork, MIT licence. No vendor logos. -->
+<!-- Copyright (c) 2026 M5LEE. Original artwork. No vendor logos. -->
+<!-- SPDX-License-Identifier: GPL-3.0-or-later -->
 <rect x="8" y="8" width="240" height="240" rx="52" fill="{NAVY}"/>
 <rect x="12" y="12" width="232" height="232" rx="48" fill="none" stroke="#243D5B" stroke-width="2"/>
 <path d="M66 145C66 65 190 65 190 145" stroke="{WHITE}" stroke-width="16" fill="none" stroke-linecap="round"/>

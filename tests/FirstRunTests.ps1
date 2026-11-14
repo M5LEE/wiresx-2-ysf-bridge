@@ -1,4 +1,5 @@
-# Copyright (c) 2026 M5LEE. MIT.
+# Copyright (c) 2026 M5LEE.
+# SPDX-License-Identifier: GPL-3.0-or-later
 param([string]$Bin)
 $ErrorActionPreference='Stop';$ProgressPreference='SilentlyContinue'
 . (Join-Path $Bin 'PublicRuntime.ps1')
