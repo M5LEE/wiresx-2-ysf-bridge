@@ -17,9 +17,9 @@ sealed class LauncherForm:Form {
  readonly BridgeStatusWorker statusWorker;
  readonly Action<string> actionHook;
  readonly Func<string,string> startupHook;
- readonly Label headline=new Label(),summary=new Label();
+ readonly Label headline=new Label(),summary=new Label(),nextSteps=new Label();
  readonly TextBox output=new TextBox();
- readonly Button check=new Button(),start=new Button(),stop=new Button();
+ readonly Button setup=new Button(),check=new Button(),start=new Button(),stop=new Button(),recover=new Button();
  readonly CheckBox startupBox=new CheckBox();
  readonly Label startupInfo=new Label();
  readonly NotifyIcon tray=new NotifyIcon();
@@ -36,16 +36,20 @@ sealed class LauncherForm:Form {
   this.root=Path.GetFullPath(root);statusProvider=readStatus;this.actionHook=actionHook;this.startupHook=startupHook;autoPending=autoStart;
   if(readStatus==null)statusWorker=new BridgeStatusWorker(this.root,25000);
   originalIcon=new Icon(Path.Combine(root,"assets","bridge.ico"));Icon=(Icon)originalIcon.Clone();
-  Text="WiresX 2 YSF Bridge - Checking";Font=new Font("Segoe UI",10F);StartPosition=FormStartPosition.CenterScreen;ClientSize=new Size(790,490);MinimumSize=new Size(730,460);AutoScaleMode=AutoScaleMode.Dpi;
-  var layout=new TableLayoutPanel {Dock=DockStyle.Fill,Padding=new Padding(18),ColumnCount=1,RowCount=7};Controls.Add(layout);
-  foreach(float height in new float[]{44,58,136,56,38,54,48})layout.RowStyles.Add(new RowStyle(SizeType.Absolute,height));
+  Text="WiresX 2 YSF Bridge - Checking";Font=new Font("Segoe UI",10F);StartPosition=FormStartPosition.CenterScreen;ClientSize=new Size(720,550);MinimumSize=new Size(736,589);AutoScaleMode=AutoScaleMode.Dpi;
+  var layout=new TableLayoutPanel {Dock=DockStyle.Fill,Padding=new Padding(16),ColumnCount=1,RowCount=8};Controls.Add(layout);
+  foreach(float height in new float[]{44,54,96,132,66,42,32,40})layout.RowStyles.Add(new RowStyle(SizeType.Absolute,height));
   headline.Text="Checking";headline.Name="BridgeStatus";headline.AccessibleName="Bridge status";headline.Font=new Font(Font.FontFamily,21F,FontStyle.Bold);headline.Dock=DockStyle.Fill;layout.Controls.Add(headline,0,0);
   summary.Text="Reading bridge status...";summary.Dock=DockStyle.Fill;layout.Controls.Add(summary,0,1);
-  output.Multiline=true;output.ReadOnly=true;output.ScrollBars=ScrollBars.Vertical;output.Dock=DockStyle.Fill;output.AccessibleName="Bridge connection details";output.BackColor=SystemColors.Window;layout.Controls.Add(output,0,2);
-  layout.Controls.Add(new Label {Text="WIRES-X must already be configured. The bridge follows its currently connected room.\r\nKeep the FTM off. Closing or minimising this window hides it to the tray; it does not stop the bridge.",Dock=DockStyle.Fill,ForeColor=Color.DimGray},0,3);
-  startupBox.Text="Start bridge and WIRES-X automatically when I sign in to Windows";startupBox.AutoSize=true;startupBox.Dock=DockStyle.Fill;startupBox.Enabled=false;layout.Controls.Add(startupBox,0,4);
-  startupInfo.Dock=DockStyle.Fill;startupInfo.ForeColor=Color.DimGray;startupInfo.Text="Sign-in startup is optional. Windows automatic sign-in is never configured.";layout.Controls.Add(startupInfo,0,5);
-  var buttons=new FlowLayoutPanel {Dock=DockStyle.Fill,WrapContents=false};start.Text="Start bridge";start.AutoSize=true;start.Enabled=false;stop.Text="Stop bridge";stop.AutoSize=true;stop.Enabled=false;check.Text="Refresh status";check.AutoSize=true;var config=new Button {Text="YSF settings",AutoSize=true};var setup=new Button {Text="Station setup",AutoSize=true};buttons.Controls.AddRange(new Control[]{start,stop,check,config,setup});layout.Controls.Add(buttons,0,6);
+  nextSteps.Dock=DockStyle.Fill;nextSteps.Padding=new Padding(8);nextSteps.BackColor=Color.AliceBlue;nextSteps.Font=new Font(Font.FontFamily,9F);nextSteps.AccessibleName="What to do next";nextSteps.Text="What to do next\r\nPlease wait for the status check.";layout.Controls.Add(nextSteps,0,2);
+  var steps=new TableLayoutPanel {Dock=DockStyle.Fill,ColumnCount=2,RowCount=3};steps.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute,205));steps.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,100));layout.Controls.Add(steps,0,3);
+  Button[] ordered={setup,check,start};string[] titles={"1. Set up bridge","2. Check status","3. Start bridge"};string[] hints={"Choose your YSF callsign and room. Usually needed only once.","Check readiness. Read the recommended fix above if something is missing.","Launch the bridge and WIRES-X. No need to open WIRES-X separately."};
+  for(int i=0;i<ordered.Length;i++){steps.RowStyles.Add(new RowStyle(SizeType.Absolute,44));ordered[i].Text=titles[i];ordered[i].Dock=DockStyle.Fill;ordered[i].Margin=new Padding(3,5,8,5);steps.Controls.Add(ordered[i],0,i);steps.Controls.Add(new Label {Text=hints[i],Dock=DockStyle.Fill,TextAlign=ContentAlignment.MiddleLeft,Font=new Font(Font.FontFamily,9F)},1,i);}start.Enabled=false;
+  output.Multiline=true;output.ReadOnly=true;output.ScrollBars=ScrollBars.Vertical;output.Dock=DockStyle.Fill;output.AccessibleName="Bridge connection details";output.BackColor=SystemColors.Window;layout.Controls.Add(output,0,4);
+  var buttons=new FlowLayoutPanel {Dock=DockStyle.Fill,WrapContents=false};stop.Text="Stop bridge";stop.AutoSize=true;stop.Enabled=false;recover.Text="Recover session";recover.AutoSize=true;recover.Visible=false;recover.Enabled=false;var config=new Button {Text="Change YSF room",AutoSize=true};buttons.Controls.AddRange(new Control[]{recover,stop,config});layout.Controls.Add(buttons,0,5);
+  startupBox.Text="Start automatically when I sign in to Windows";startupBox.AutoSize=true;startupBox.Dock=DockStyle.Fill;startupBox.Enabled=false;layout.Controls.Add(startupBox,0,6);
+  startupInfo.Dock=DockStyle.Fill;startupInfo.ForeColor=Color.DimGray;startupInfo.Text="Sign-in startup is optional. Windows automatic sign-in is never configured.";layout.Controls.Add(startupInfo,0,7);
+  recover.Click+=delegate{if(actionHook!=null || MessageBox.Show(this,"Recover an interrupted session? Close WIRES-X and YMLAN first. Recovery verifies that the old bridge is stopped, restores only its two saved port names and keeps your setup. It will not start anything.","Recover session",MessageBoxButtons.YesNo,MessageBoxIcon.Information)==DialogResult.Yes)Action("Recover");};
   var menu=new ContextMenuStrip();menu.Items.AddRange(new ToolStripItem[]{openItem,startItem,stopItem,new ToolStripSeparator(),exitItem});tray.ContextMenuStrip=menu;tray.Icon=originalIcon;tray.Text="WiresX 2 YSF Bridge - Checking";tray.Visible=true;
   openItem.Click+=delegate{OpenStatus();};tray.DoubleClick+=delegate{OpenStatus();};startItem.Click+=delegate{if(start.Enabled)Action("Start");};stopItem.Click+=delegate{if(stop.Enabled)ConfirmStop();};exitItem.Click+=delegate{ExitStatus();};
   start.Click+=delegate{Action("Start");};stop.Click+=delegate{ConfirmStop();};check.Click+=delegate{CheckStatus();};
@@ -64,7 +68,7 @@ sealed class LauncherForm:Form {
  }
  void SetPresentation(string code,string message){
   headline.Text=code=="OtherSession"?"Other session":code=="SetupRequired"?"Setup required":code=="NeedsAttention"?"Needs attention":code;
-  summary.Text=message;Text="WiresX 2 YSF Bridge - "+headline.Text;
+  summary.Text=message;nextSteps.Text="What to do next\r\n"+RecommendedSteps(code);Text="WiresX 2 YSF Bridge - "+headline.Text;
   Color color=code=="Running"?Color.ForestGreen:(code=="Error" || code=="NeedsAttention")?Color.Firebrick:(code=="Starting" || code=="Connecting" || code=="Degraded")?Color.DarkOrange:Color.DimGray;headline.ForeColor=color;
   tray.Text=("WiresX 2 YSF Bridge - "+headline.Text).Substring(0,Math.Min(63,("WiresX 2 YSF Bridge - "+headline.Text).Length));
   if(iconCode!=code){
@@ -89,11 +93,12 @@ sealed class LauncherForm:Form {
   if(actionHook!=null)actionHook(action);
   else{
    string script=Path.Combine(root,"BridgeSupervisor.ps1");if(!File.Exists(script))throw new FileNotFoundException("Launcher backend not installed",script);
+   // Controller lifetime must not depend on this UI or redirected UI-owned pipes.
    var process=new Process {StartInfo=new ProcessStartInfo("powershell.exe","-NoProfile -NonInteractive -ExecutionPolicy Bypass -File \""+script+"\" -"+action+(action=="Start"?" -UntilStopped":"")) {UseShellExecute=true,WindowStyle=ProcessWindowStyle.Hidden,WorkingDirectory=root},EnableRaisingEvents=true};
-   process.Exited+=delegate{int code=process.ExitCode;process.Dispose();if(code!=0 && !IsDisposed && IsHandleCreated)BeginInvoke(new Action(delegate{lastActionError="The bridge controller reported a fault. Check diagnostics before retrying.";pendingStartUntil=DateTime.MinValue;CheckStatus();}));};process.Start();
+   process.Exited+=delegate{int code=process.ExitCode,pid=process.Id;process.Dispose();if(!IsDisposed && IsHandleCreated)BeginInvoke(new Action(delegate{lastActionError=code==0?null:ExplainActionError(ReadActionError(pid));pendingStartUntil=DateTime.MinValue;CheckStatus();}));};process.Start();
   }
-  SetPresentation(action=="Start"?"Starting":"Stopping",action=="Start"?"Start requested. Preparing adapter, then launching WIRES-X. Login can take several minutes.":"Stop requested. Waiting for owned resources to clean up.");
-  start.Enabled=false;stop.Enabled=false;startItem.Enabled=false;stopItem.Enabled=false;
+  SetPresentation(action=="Start"?"Starting":action=="Recover"?"Recovering":"Stopping",action=="Start"?"Preparing the bridge, then launching WIRES-X. Login can take several minutes.":action=="Recover"?"Checking the old session and restoring its saved port names. Nothing will be started.":"Stopping the bridge and restoring its connections. Please wait.");
+  start.Enabled=false;stop.Enabled=false;recover.Enabled=false;startItem.Enabled=false;stopItem.Enabled=false;
  }catch(Exception e){pendingStartUntil=DateTime.MinValue;SetPresentation("Error",e.Message);if(actionHook==null)OpenStatus();}}
  void CheckStatus(){
   if(busy || changingStartup || IsDisposed)return;busy=true;check.Enabled=false;var worker=new BackgroundWorker();
@@ -105,13 +110,43 @@ sealed class LauncherForm:Form {
     string code=Value(data,"StatusCode"),message=Value(data,"Summary");bool canStart=Flag(data,"CanStart"),canStop=Flag(data,"CanStop");
     if(code=="Stopped" && pendingStartUntil>DateTime.UtcNow){code="Starting";message="Start requested. Waiting for the bridge controller.";canStart=false;}
     else if(code!="Stopped")pendingStartUntil=DateTime.MinValue;
-    if(lastActionError!=null && (code=="Stopped" || code=="Error")){code="Error";message=lastActionError;}
-    SetPresentation(code,message);start.Enabled=canStart;stop.Enabled=canStop;startItem.Enabled=canStart;stopItem.Enabled=canStop;
-    string room=Value(data,"NativeRoom");output.Text="WIRES-X room: "+(room.Length>0?room:"Not connected / not verified")+"\r\nYSF destination: "+Value(data,"YsfDestination")+"\r\nStatus checked: "+DateTime.Now.ToString("HH:mm:ss")+"\r\n\r\n"+message;
-    applyingStatus=true;startupBox.Checked=Flag(data,"StartupEnabled");applyingStatus=false;startupBox.Enabled=!changingStartup && Value(data,"StartupState")!="Error";startupInfo.Text=Value(data,"StartupMessage")+"\r\nRequires a signed-in desktop; no Windows automatic sign-in is configured.";
+    if(lastActionError!=null && (code=="Stopped" || code=="Error" || code=="NeedsAttention")){code="Error";message=lastActionError;}
+    SetPresentation(code,message);if(lastActionError==null && Value(data,"NextStep").Length>0)nextSteps.Text="What to do next\r\n"+Value(data,"NextStep");start.Enabled=canStart;stop.Enabled=canStop;startItem.Enabled=canStart;stopItem.Enabled=canStop;
+    recover.Visible=Flag(data,"CanRecover");recover.Enabled=Flag(data,"CanRecover");
+    string room=Value(data,"NativeRoom");output.Text="WIRES-X room: "+(room.Length>0?room:"Not connected")+"\r\nYSF room: "+Value(data,"YsfDestination")+"\r\nChecked: "+DateTime.Now.ToString("HH:mm:ss");
+    applyingStatus=true;startupBox.Checked=Flag(data,"StartupEnabled");applyingStatus=false;startupBox.Enabled=!changingStartup && Value(data,"StartupState")!="Error";startupInfo.Text=Value(data,"StartupMessage");
     if(autoPending){autoPending=false;if(canStart && Flag(data,"StartupEnabled") && Value(data,"StartupState")=="Enabled")Action("Start");else if(code!="Running" && code!="Starting" && code!="Connecting")OpenStatus();}
-   }catch(Exception error){applyingStatus=false;start.Enabled=false;stop.Enabled=false;startItem.Enabled=false;stopItem.Enabled=false;startupBox.Enabled=false;SetPresentation("Error",error.Message);if(autoPending){autoPending=false;OpenStatus();}}
+   }catch(Exception error){applyingStatus=false;start.Enabled=false;stop.Enabled=false;recover.Enabled=false;startItem.Enabled=false;stopItem.Enabled=false;startupBox.Enabled=false;SetPresentation("Error",error.Message);if(autoPending){autoPending=false;OpenStatus();}}
   }worker.Dispose();};worker.RunWorkerAsync();
+ }
+ static string ReadActionError(int pid){
+  try{string path=Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),"M5LEE","WIRESX-to-YSF-Brtidge","last-controller-error.json");if(new FileInfo(path).Length>65536)return "UnknownControllerError";var data=new JavaScriptSerializer().Deserialize<Dictionary<string,object>>(File.ReadAllText(path));DateTime stamp=DateTime.Parse(Value(data,"Utc")).ToUniversalTime();if(Convert.ToInt32(data["Pid"])==pid && stamp<=DateTime.UtcNow.AddSeconds(2) && stamp>=DateTime.UtcNow.AddMinutes(-2))return Value(data,"Code");}catch{}return "UnknownControllerError";
+ }
+ static string RecommendedSteps(string code){
+  switch(code){
+   case "NeedsAttention":return "Close WIRES-X and YMLAN first. Click Recover session below, then 2. Check status.\r\nWhen ready, click 3. Start bridge. Your saved setup is kept.";
+   case "SetupRequired":return "Click 1. Set up bridge. Enter your YSF callsign and select a room.\r\nComplete the connection tools if requested, then return to 2. Check status.";
+   case "Stopped":return "Already set up? Click 3. Start bridge.\r\nFirst time here? Follow buttons 1, 2 and 3 from top to bottom.";
+   case "Starting":case "Connecting":return "Allow several minutes for WIRES-X to log in. Do not keep pressing Start.\r\nIf it stays here, check the WIRES-X window for a login/room error and check your Internet connection.";
+   case "Degraded":return "Click 2. Check status again. Check Internet access and the selected YSF room.\r\nDo not reinstall or change settings just because a status update is late.";
+   case "OtherSession":return "Use the status window belonging to the running bridge.\r\nIf changing installations, stop that bridge normally first. Do not force-close its processes.";
+   case "Running":return "No action needed. The bridge is ready to use.\r\nClosing this window leaves the bridge running. Use Stop bridge to shut it down.";
+   case "Recovering":case "Stopping":return "Please wait for this operation to finish, then click 2. Check status.\r\nDo not run a second recovery or start another bridge.";
+   case "Error":return "Follow the message above, then click 2. Check status once.\r\nIf status will not load, reopen only this status app as administrator.\r\nIf a component is missing, repair the installation without deleting your saved station data.";
+   default:return "Please wait for the status check. Nothing is started by checking status.";
+  }
+ }
+ static string ExplainActionError(string code){
+  switch(code){
+   case "CloseWiresXBeforeRecovery":return "Close WIRES-X and YMLAN, then select Recover session again. Nothing has been changed.";
+   case "ExistingOwnerRequiresInspection":case "SupervisorNotAliveManualRecoveryRequired":return "The previous session did not finish cleanup. Close WIRES-X, then select Recover session. Do not delete your setup.";
+   case "ExistingAdapter":case "RecoverySessionStillAlive":return "A bridge process is still running. Recovery was refused; stop that session normally first.";
+   case "CaptureYourOwnRadioProfileFirst":return "Open Setup > Advanced setup and create or import your own connection profile. Your WIRES-X login does not need changing.";
+   case "RecoveryAliasChanged":case "RecoveryAliasScope":case "InvalidRecoveryOwner":return "The saved connections do not match this session. No automatic recovery is safe. Keep your settings and ask for support. Code: "+code;
+   case "InstalledBinaryHashMismatch":return "An installed component does not match its manifest. Repair the installation; keep your station data.";
+   case "AdapterReadyTimeout":case "AdapterExitedBeforeReady":return "The adapter could not open its connections. Check the HRI-200 USB connection and the ports in Setup > Advanced setup.";
+   default:return "The operation failed. Your saved setup has been kept. Error code: "+code+". Refresh status before retrying.";
+  }
  }
  void ChangeStartup(){
   bool enable=startupBox.Checked;

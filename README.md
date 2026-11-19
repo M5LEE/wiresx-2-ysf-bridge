@@ -1,117 +1,118 @@
 # WiresX 2 YSF Bridge
 
-**By M5LEE · 0.1.0-alpha.12 · Free, experimental Windows software**
+**By M5LEE · 0.1.0-alpha.13 · Free, experimental Windows software**
 
-Connect the room currently linked in **official WIRES-X** to a **YSF reflector**. WiresX 2 YSF Bridge carries digital voice and supported caller information between the two networks, using your existing WIRES-X installation and genuine HRI-200.
+Connect the room currently linked in **official WIRES-X** to a **YSF reflector**, using your existing WIRES-X installation and genuine HRI-200. The bridge carries digital voice and supported caller information between the two networks.
 
-**Set up WIRES-X first.** The bridge uses its existing account configuration and follows its currently connected room. Normal bridge configuration asks for just your **YSF bridge callsign** and **YSF destination room**—there is no second WIRES-X account setup.
+**Set up WIRES-X first.** Keep its existing account and room settings. Normal bridge setup asks for your **YSF bridge callsign** and **YSF destination room**, not another WIRES-X login or gateway ID. The bridge follows whichever room is connected in WIRES-X.
 
 ## Downloads
 
 | File | Download |
 |---|---|
-| Windows x64 installer | [Setup.exe](https://github.com/M5LEE/wiresx-2-ysf-bridge/releases/download/v0.1.0-alpha.12/WiresX-2-YSF-Bridge-0.1.0-alpha.12-Setup.exe) |
-| Alpha.12 source snapshot | [Source.zip](https://github.com/M5LEE/wiresx-2-ysf-bridge/releases/download/v0.1.0-alpha.12/WiresX-2-YSF-Bridge-0.1.0-alpha.12-Source.zip) |
-| File checksums | [SHA256SUMS.txt](https://github.com/M5LEE/wiresx-2-ysf-bridge/releases/download/v0.1.0-alpha.12/WiresX-2-YSF-Bridge-0.1.0-alpha.12-SHA256SUMS.txt) |
+| Windows x64 installer | [Setup.exe](https://github.com/M5LEE/wiresx-2-ysf-bridge/releases/download/v0.1.0-alpha.13/WiresX-2-YSF-Bridge-0.1.0-alpha.13-Setup.exe) |
+| Matching source | [Source.zip](https://github.com/M5LEE/wiresx-2-ysf-bridge/releases/download/v0.1.0-alpha.13/WiresX-2-YSF-Bridge-0.1.0-alpha.13-Source.zip) |
+| File checksums | [SHA256SUMS.txt](https://github.com/M5LEE/wiresx-2-ysf-bridge/releases/download/v0.1.0-alpha.13/WiresX-2-YSF-Bridge-0.1.0-alpha.13-SHA256SUMS.txt) |
 
-[Release page](https://github.com/M5LEE/wiresx-2-ysf-bridge/releases/tag/v0.1.0-alpha.12) · [Release notes](https://github.com/M5LEE/wiresx-2-ysf-bridge/blob/v0.1.0-alpha.12/docs/RELEASE-alpha.12.md)
+[Release page](https://github.com/M5LEE/wiresx-2-ysf-bridge/releases/tag/v0.1.0-alpha.13) · [What changed](docs/RELEASE-alpha.13.md) · [Troubleshooting](docs/TROUBLESHOOTING.md)
 
-Downloads are public; no GitHub sign-in is required.
+Downloads are public. This is still an **unsigned alpha**, not a beta or a certified production system. Alpha.13 combines the established alpha.10 voice runtime with simpler setup, clearer status and safe interrupted-session recovery. It does **not** include the experimental receive-recovery changes from alpha.11/12. Previous releases remain available.
 
-## Features
+## Before you install
 
-- Links one WIRES-X room to one YSF destination at a time.
-- Follows room changes made in WIRES-X.
-- Searchable YSF room list and configurable DG-ID.
-- Change the YSF destination between overs with **Apply YSF room**, without restarting WIRES-X.
-- Separate active and saved YSF destination display, with old-room logout and failed-switch recovery.
-- Caller callsign and supported C4FM metadata forwarding.
-- Windows launcher with room, connection and tray status.
-- Optional automatic startup when you sign in to Windows.
-- Automatic virtual-port setup using the bundled com0com dependency.
-
-![Application, settings and installer icons](assets/icon-preview.png)
-
-## Requirements
+You need:
 
 - Windows 10 or later, **64-bit**, with **.NET Framework 4.8**.
-- Official **WIRES-X 2.0.1.0**, already configured and working, with the HRI-200 driver installed.
+- Official **WIRES-X 2.0.1.0**, configured and working, with the Yaesu HRI-200 driver installed.
 - A genuine **HRI-200** connected to the PC.
-- An **FTM-100 for the initial local radio-profile capture**, unless you already have a compatible saved bridge profile.
-- Administrator approval when requested. Use the same Windows account for setup, startup configuration and removal.
+- An **FTM-100 for initial connection-profile capture**, unless you already have a compatible saved bridge profile.
+- Administrator approval when requested. Use the same Windows account for setup, operation, startup configuration and removal.
 
-This is an independent project, not an official Yaesu product. WIRES-X software and Yaesu drivers are obtained separately.
+This is an independent project, not an official Yaesu product. Official WIRES-X and Yaesu drivers are obtained separately. An existing WIRES-X installation alone does not provide the bridge's saved connection profile.
 
-## Testing with an existing radio-based WIRES-X bridge
+## Install and follow 1 → 2 → 3
 
-For the [alpha.12 tester build](https://github.com/M5LEE/wiresx-2-ysf-bridge/releases/tag/v0.1.0-alpha.12), keep your existing WIRES-X account, room and radio settings as they are. Once this software bridge's setup is complete:
+Run **WiresX-2-YSF-Bridge-0.1.0-alpha.13-Setup.exe**. Leave **Set up my bridge** selected on the final page, or open **Bridge launcher** from the Start menu.
 
-1. **Turn off WIRES-X's separate automatic startup**, including any WIRES-X/YMLAN startup entry that launches it independently of the bridge.
-2. **Close WIRES-X completely before disconnecting the radio.**
-3. Turn the radio off and unplug its connection to the **HRI-200**. Leave the HRI-200 powered and connected to the PC; do not unplug its USB connection.
-4. Open **WiresX 2 YSF Bridge** and select **Start bridge**. The bridge prepares its connection and **automatically launches WIRES-X**. Do not launch WIRES-X separately; allow several minutes for login.
+### 1. Set up bridge
 
-**First-time testers:** complete the setup below first, including your YSF callsign/destination and a valid saved connection profile. If you need to create a profile, keep the supported radio connected and on for that capture, then follow the shutdown/disconnection steps above. An existing radio-based WIRES-X installation alone does not supply a saved bridge profile.
+In the setup window:
 
-## Installation and first-time setup
+1. **Your YSF callsign:** enter the callsign you want the bridge to use on YSF.
+2. **Choose a YSF room:** open the room chooser, select your destination and its required DG-ID, click **Save config**, then close the chooser.
+3. **Save setup:** save the callsign and connection settings. Select **Back to bridge** afterwards.
 
-1. Download and run **`WiresX-2-YSF-Bridge-0.1.0-alpha.12-Setup.exe`** from the release page. Leave **Set up my bridge** selected on the final page.
-2. Enter your **YSF bridge callsign** and select the **YSF destination room**. Check the destination's required DG-ID.
-3. Enable **Advanced setup** and choose **Automatic setup**. After confirmation, setup detects the HRI-200 and configures the virtual-port connection. A compatible existing connection is reused.
-4. If no valid radio profile is present, connect and power on your FTM-100, then choose **Create connection profile** under Advanced setup. The capture takes about two minutes, may close and reopen WIRES-X, and blocks PTT/voice during capture. Reopen Station setup afterwards to check the result.
-5. **Power the FTM-100 off and leave the HRI-200 connected** for bridge operation. Save your settings, select **Open bridge**, then **Start bridge**. Allow several minutes for WIRES-X to log in and connect.
+**First use only:** if the connection is not ready or Save is disabled, tick **Advanced setup** and choose **Automatic setup**. After confirmation it detects the genuine HRI-200 and sets up the virtual-port connection using the bundled com0com dependency. A compatible existing connection is reused; do not guess COM numbers.
 
-If setup already reports a valid connection and profile, reuse them; there is no need to repeat capture. **Import existing settings** under Advanced setup can import a compatible previous bridge folder while retaining your chosen YSF callsign.
+If you do not have a valid connection profile, connect and power on your FTM-100 and choose **Create connection profile** under Advanced setup. Follow the ownership confirmation and wait about two minutes. Capture may close and reopen WIRES-X; PTT and voice forwarding are blocked during capture. Reopen setup to check the result. Alternatively, **Import existing settings** can reuse a compatible previous bridge folder while retaining your chosen YSF callsign.
 
-## Everyday use
+**Before normal bridge operation:** close WIRES-X completely, turn the radio off and disconnect its cable from the HRI-200. Leave the HRI-200 powered and connected to the PC by USB. Keep your WIRES-X account and room settings unchanged. Disable separate WIRES-X/YMLAN automatic startup so it does not compete with the bridge's startup order. Complete any required radio-profile capture before disconnecting the radio.
 
-Choose or change the WIRES-X room in official WIRES-X as usual. To change the YSF side while running, select the destination and its DG-ID in bridge settings, then choose **Apply YSF room**. The bridge waits for a quiet point, logs out of the old reflector and joins the new one without restarting WIRES-X or the serial connection.
+### 2. Check status
 
-Check **Active YSF** for the running destination; **Save config** alone saves the next-start selection and does not switch a running connection. A failed switch is reported and attempts to restore the previous destination. Reflector dashboard lists can lag; see [live YSF destination changes](docs/LIVE-YSF-APPLY.md) for details and limitations.
+Select **2. Check status** in the bridge window. The **What to do next** panel explains anything missing and recommends the next action. This check does not start or stop the bridge.
 
-The launcher shows the current WIRES-X room, active/saved YSF destination and connection state. Use **Start bridge** and **Stop bridge** to control the link. It runs until stopped or a safety fault occurs; it does not stop on a normal session timer.
+If it says **Needs attention** after a reboot or interrupted session, follow [Recover after an interrupted session](#recover-after-an-interrupted-session). Do not delete settings or reinstall just to clear this message.
 
-**Closing the window does not stop the bridge.** It hides to the Windows notification area. Double-click the tray icon to reopen it. **Exit status app (bridge stays running)** closes only the status application. A separate bridge session cannot be controlled from this launcher.
+### 3. Start bridge
+
+Select **3. Start bridge** once. The bridge prepares its connection and **launches WIRES-X automatically**. Do not open WIRES-X separately or repeatedly press Start. Allow several minutes for the transceiver handshake, login and room connection.
+
+**Running** means the owned bridge is live, its WIRES-X room proof is fresh and the YSF link is healthy. Confirm actual two-way audio with a listener; green status alone does not prove audio quality.
+
+## Everyday operation
+
+- Change the WIRES-X room in official WIRES-X as usual; the bridge follows it.
+- To change the YSF side while running, select **Change YSF room**, choose a destination/DG-ID and click **Apply YSF room**. The bridge waits for a quiet point, logs out of the old reflector and joins the new one without restarting WIRES-X.
+- Check **Active YSF** for the running destination. **Save config** alone saves the next-start selection; it does not switch an active link. A failed switch reports the problem and attempts to restore the previous destination. See [live YSF destination changes](docs/LIVE-YSF-APPLY.md).
+- Use **Stop bridge** and confirm when you want to stop. Wait for cleanup before restarting, upgrading or disconnecting equipment.
+- **Closing the status window does not stop the bridge.** It hides to the notification area. Double-click the tray icon to reopen it. **Exit status app (bridge stays running)** closes only the status application.
+
+The bridge runs until you stop it or a safety fault occurs. It does not use a normal session countdown.
+
+## Recover after an interrupted session
+
+A reboot or power interruption can leave a record of the previous session. The bridge refuses to start another session until the old one is safely resolved.
+
+1. Close **WIRES-X** and its **YMLAN** companion normally.
+2. In the bridge window, select **Recover session** and confirm.
+3. Select **2. Check status**, then **3. Start bridge** when ready.
+
+Recovery checks that the old processes are gone and restores only the bridge's two saved port names. It keeps your callsign, room settings and connection profile, and does **not** start anything. If recovery refuses, follow its error message; do not delete the ownership record or force-close unknown processes. See [recommended fixes](docs/TROUBLESHOOTING.md).
 
 ## Automatic startup
 
-In the launcher, enable **Start bridge and WIRES-X automatically when I sign in to Windows**. At your next sign-in, the launcher starts the adapter before WIRES-X.
+Tick **Start automatically when I sign in to Windows** in the bridge window. At your next interactive sign-in, the launcher starts the adapter before WIRES-X after a short delay. Enabling this option does not start the bridge immediately.
 
-Startup is optional and initially off. Enabling it backs up and replaces matching WIRES-X/YMLAN Startup shortcuts so the programs start in the correct order; disabling it restores those shortcuts. Conflicting startup entries are reported for review.
+Startup is optional and initially off. It backs up and replaces matching WIRES-X/YMLAN Startup shortcuts; disabling it restores them. Conflicting startup entries are reported for review. It is **not a pre-login service** and does not configure Windows automatic sign-in. Check it on your own PC before relying on unattended operation. An interrupted previous session may still need explicit recovery.
 
-This requires an interactive Windows sign-in. It is **not** a pre-login service and does not enable Windows automatic sign-in. Check startup on your own PC before relying on it unattended.
+## Upgrade or uninstall
 
-## Upgrading or uninstalling
+Select **Stop bridge**, wait for cleanup, then **Exit status app (bridge stays running)** from the tray and close setup/settings windows. Run the new installer, keeping the same installation directory and Windows account. An active installation is refused rather than forcibly stopped.
 
-Choose **Stop bridge**, wait for cleanup, then **Exit status app** and close any setup/settings windows before running an upgrade or uninstall. The installer refuses an active installation rather than stopping it for you. Do not run two copies of the bridge at once.
+Normal uninstall keeps your station settings and profile, shared virtual-port drivers/devices and official WIRES-X. Do not delete station data to troubleshoot an upgrade. Avoid running two bridge installations at once.
 
-Normal uninstall retains your station settings and radio profile, shared virtual-port drivers and devices, and official WIRES-X. A valid existing profile can be reused after reinstalling. Upgrading from an older release requires one stopped installation; later YSF destination changes use **Apply YSF room** without restarting WIRES-X.
+## Problems and support
 
-## Alpha limitations
+**Please report bugs and setup problems through [GitHub Issues](https://github.com/M5LEE/wiresx-2-ysf-bridge/issues) so they can be tracked and help other users. Wherever possible, please avoid messaging M5LEE directly for support.**
 
-- The installer is **unsigned**, and the bridge remains experimental rather than a certified production system.
-- The supported setup is limited to the WIRES-X version and hardware listed above. Other combinations are not confirmed compatible.
-- The bundled legacy virtual-port driver may be blocked by Secure Boot or Memory Integrity. Setup checks device health and reports failures; do not disable Windows security to force it to load.
-- Receiver compatibility, GPS accuracy, long-term reliability and fresh-PC setup are not fully validated. A connected indicator is not an audio-quality test.
-- Do not rely on this bridge for emergency communications.
+First read **What to do next** or **Help / recommended fixes** in the application, then the [troubleshooting guide](docs/TROUBLESHOOTING.md). Search existing issues before opening a new one. Include the bridge version, Windows version, step you were performing, exact error and what you expected. Redact screenshots and never post passwords, private connection profiles or location data.
 
-See [compatibility and testing](https://github.com/M5LEE/wiresx-2-ysf-bridge/blob/v0.1.0-alpha.12/docs/VERIFICATION.md) for the current release's test coverage and limitations.
+## Limitations and source
 
-## Source and technical documentation
+The installer is unsigned. Fresh-PC setup, universal receiver compatibility, GPS accuracy and long-term reliability are not fully validated. The legacy virtual-port driver may be blocked by Secure Boot or Memory Integrity; **do not disable Windows security** to force it to load. Do not rely on this experimental bridge for emergency communications.
 
-For source matching the installer above, use the [alpha.12 tag](https://github.com/M5LEE/wiresx-2-ysf-bridge/tree/v0.1.0-alpha.12) or its **Source.zip**. The default branch retains the earlier runtime baseline; it is not the source snapshot for this download.
-
+- [Compatibility and test coverage](docs/VERIFICATION.md)
 - [Building from source](docs/DEVELOPMENT.md)
 - [C4FM metadata format](docs/C4FM-METADATA-PROFILES.md)
+- [Matching source tag](https://github.com/M5LEE/wiresx-2-ysf-bridge/tree/v0.1.0-alpha.13)
 - [Third-party notices](THIRD_PARTY_NOTICES.md)
 
-## Licence and optional support
+## Licence and optional donations
 
-Copyright (c) **2026 M5LEE**. The current source's original contributions are licensed under the [GNU General Public License, version 3 or later](LICENSE) (`GPL-3.0-or-later`), **AS IS and without warranty**. You may redistribute and modify them under those terms. Bundled com0com retains its separate upstream licence; third-party rights remain with their owners. See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+Copyright (c) **2026 M5LEE**. Current original contributions are licensed under the [GNU General Public License, version 3 or later](LICENSE) (`GPL-3.0-or-later`), **AS IS and without warranty**. Bundled com0com retains its separate upstream licence and source. Earlier alpha.11 and prior downloads retain their original MIT permissions for the bridge code; old downloads and tags are not replaced.
 
-**Earlier releases:** alpha.11 and earlier published installers, source archives and version tags retain their original MIT terms for the bridge code. Those permissions and historical downloads are unchanged. Alpha.12 is the first GPLv3-or-later binary distribution.
-
-Donations to the **CumbriaCQ network** are entirely optional, not licence fees or feature unlocks:
+Donations to the **CumbriaCQ network** are optional, not licence fees or feature unlocks:
 
 - PayPal: https://www.paypal.com/donate?campaign_id=HQ9VSCMVLLYPC
 - Support information: https://cumbriacq.com/donate-support/

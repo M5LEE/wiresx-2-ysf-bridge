@@ -44,6 +44,10 @@ if(!$SkipTests){
  if($LASTEXITCODE){throw 'Sign-in startup tests failed'}
  & powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File (Join-Path $root 'tests\StatusTests.ps1') -Bin $bin
  if($LASTEXITCODE){throw 'Readable status tests failed'}
+ & powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File (Join-Path $root 'tests\RebootRecoveryTests.ps1') -Bin $bin
+ if($LASTEXITCODE){throw 'Interrupted-session recovery tests failed'}
+ & powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File (Join-Path $root 'tests\ControllerErrorTests.ps1') -Bin $bin
+ if($LASTEXITCODE){throw 'Controller error-reporting tests failed'}
  & powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File (Join-Path $root 'tests\InstallerGuardTests.ps1') -Bin $bin
  if($LASTEXITCODE){throw 'Active-installation protection tests failed'}
  & $csc /nologo /warnaserror+ /r:System.Windows.Forms.dll /r:System.Drawing.dll /r:System.Web.Extensions.dll ("/out:"+(Join-Path $tests 'LauncherUiTests.exe')) (Join-Path $root 'tests\LauncherUiTests.cs')

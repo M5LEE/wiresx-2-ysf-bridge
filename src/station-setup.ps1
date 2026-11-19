@@ -6,11 +6,11 @@ $ErrorActionPreference='Stop';$ProgressPreference='SilentlyContinue'
 . (Join-Path $PSScriptRoot 'FirstRun.ps1')
 . (Join-Path $PSScriptRoot 'ExistingStation.ps1')
 Add-Type -AssemblyName System.Windows.Forms;Add-Type -AssemblyName System.Drawing
-$form=New-Object Windows.Forms.Form;$form.Text='WiresX 2 YSF Bridge - Station setup (ALPHA)';$form.Size=New-Object Drawing.Size(760,610);$form.StartPosition='CenterScreen';$form.Font=New-Object Drawing.Font('Segoe UI',9)
+$form=New-Object Windows.Forms.Form;$form.Text='WiresX 2 YSF Bridge - Setup';$form.ClientSize=New-Object Drawing.Size(700,400);$form.MinimumSize=New-Object Drawing.Size(716,439);$form.StartPosition='CenterScreen';$form.Font=New-Object Drawing.Font('Segoe UI',9)
 $form.Icon=New-Object Drawing.Icon((Join-Path $script:Bin 'assets\settings.ico'))
 $panel=New-Object Windows.Forms.TableLayoutPanel;$panel.Dock='Fill';$panel.Padding=New-Object Windows.Forms.Padding(16);$panel.ColumnCount=2;$panel.ColumnStyles.Add((New-Object Windows.Forms.ColumnStyle('Absolute',190)));$panel.ColumnStyles.Add((New-Object Windows.Forms.ColumnStyle('Percent',100)));$form.Controls.Add($panel)
 # Gateway is the legacy storage key for the YSF-side bridge callsign, NOT a WIRES-X login ID.
-$fields=@{};$portNames=@('PhysicalPort','NativePort','AdapterPort');$names=@('Gateway','PhysicalPort','NativePort','AdapterPort','NativePath');$labels=@('YSF bridge callsign','Genuine HRI-200 COM port','Virtual COM used by WIRES-X','Virtual COM used by bridge','Official WIRES-X executable')
+$fields=@{};$portNames=@('PhysicalPort','NativePort','AdapterPort');$names=@('Gateway','PhysicalPort','NativePort','AdapterPort','NativePath');$labels=@('1. Your YSF callsign','Genuine HRI-200 COM port','Virtual COM used by WIRES-X','Virtual COM used by bridge','Official WIRES-X executable')
 $old=$null;try{$old=Get-Station}catch{}
 for($row=0;$row -lt 6;$row++){$null=$panel.RowStyles.Add((New-Object Windows.Forms.RowStyle('Absolute',36)))}
 for($i=0;$i -lt $names.Count;$i++){
@@ -21,7 +21,7 @@ for($i=0;$i -lt $names.Count;$i++){
  if($old){if($box -is [Windows.Forms.ComboBox]){$null=$box.Items.Add($old.($names[$i]));$box.SelectedItem=$old.($names[$i])}else{$box.Text=$old.($names[$i])}}
 }
 $fields.Gateway.MaxLength=10;$fields.Gateway.CharacterCasing='Upper'
-$ysfLabel=New-Object Windows.Forms.Label;$ysfLabel.Text='YSF destination room';$ysfLabel.Dock='Fill';$ysfLabel.TextAlign='MiddleLeft';$panel.Controls.Add($ysfLabel,0,1)
+$ysfLabel=New-Object Windows.Forms.Label;$ysfLabel.Text='2. Choose a YSF room';$ysfLabel.Dock='Fill';$ysfLabel.TextAlign='MiddleLeft';$panel.Controls.Add($ysfLabel,0,1)
 $ysfChoose=New-Object Windows.Forms.Button;$ysfChoose.Text='Choose YSF destination room...';$ysfChoose.Dock='Fill';$panel.Controls.Add($ysfChoose,1,1)
 $ysfChoose.Add_Click({Start-Process (Join-Path $script:Bin 'Bridge.exe')})
 function Refresh-YsfTarget {
@@ -50,10 +50,10 @@ function Refresh-Ports {
  if($missing.Count){$portSummary.Text+=' Not listed (kept): '+(($missing|Select-Object -Unique) -join ', ')}
 }
 $refreshPorts.Add_Click({Refresh-Ports});Refresh-Ports
-$basicNotes="Set up WIRES-X first and connect it to a room.`r`n`r`nEnter the callsign to use on YSF, then choose your YSF destination room.`r`n`r`nThe bridge links your YSF destination to the room currently connected in WIRES-X. Change WIRES-X rooms there as usual.`r`n`r`nSave your changes, then select Open bridge to view status or start. Changes take effect the next time the bridge starts."
+$basicNotes="Set up WIRES-X first. The bridge follows the room currently connected in WIRES-X.`r`n`r`n1. Enter the callsign you want to show on YSF.`r`n2. Choose a room; click Save config in the room chooser, then close it.`r`n3. Click Save setup below, then Back to bridge to check status and start.`r`n`r`nFirst use? Follow the message below. Need help? Click Help / recommended fixes."
 $advancedNotes="Connection tools are for initial setup or troubleshooting. Import existing settings reuses a validated connection profile without stopping the previous installation.`r`n`r`nKeep the FTM OFF and HRI connected when bridging. Profile capture requires your own supported radio connected and ON; follow its confirmation instructions. Private connection data stays on this PC."
 $notes=New-Object Windows.Forms.Label;$notes.Text=$basicNotes;$notes.Dock='Fill';$details.Controls.Add($notes,0,2)
-$advanced.Add_CheckedChanged({foreach($row in @(2,3,4,5)){$panel.RowStyles[$row].Height=if($advanced.Checked){36}else{0};foreach($column in @(0,1)){$panel.GetControlFromPosition($column,$row).Visible=$advanced.Checked}};foreach($tool in @($automatic,$existing,$portSummary,$import,$capture,$refreshPorts)){$tool.Visible=$advanced.Checked};$details.RowStyles[1].Height=if($advanced.Checked){30}else{0};$notes.Text=if($advanced.Checked){$advancedNotes}else{$basicNotes};$panel.RowStyles[8].Height=if($advanced.Checked){76}else{42}})
+$advanced.Add_CheckedChanged({$form.ClientSize=New-Object Drawing.Size($form.ClientSize.Width,$(if($advanced.Checked){600}else{400}));foreach($row in @(2,3,4,5)){$panel.RowStyles[$row].Height=if($advanced.Checked){36}else{0};foreach($column in @(0,1)){$panel.GetControlFromPosition($column,$row).Visible=$advanced.Checked}};foreach($tool in @($automatic,$existing,$portSummary,$import,$capture,$refreshPorts)){$tool.Visible=$advanced.Checked};$details.RowStyles[1].Height=if($advanced.Checked){30}else{0};$notes.Text=if($advanced.Checked){$advancedNotes}else{$basicNotes};$panel.RowStyles[8].Height=if($advanced.Checked){76}else{42}})
 foreach($row in @(2,3,4,5)){$panel.RowStyles[$row].Height=0;foreach($column in @(0,1)){$panel.GetControlFromPosition($column,$row).Visible=$false}}
 $refreshPorts.Visible=$false;$automatic.Visible=$false;$existing.Visible=$false;$portSummary.Visible=$false;$details.RowStyles[1].Height=0
 $automatic.Add_Click({
@@ -62,7 +62,7 @@ $automatic.Add_Click({
  try{$s=Initialize-StationConnections -Gateway $fields.Gateway.Text -OwnRoomId '' -PhysicalPort $fields.PhysicalPort.Text -NativePath $fields.NativePath.Text
   foreach($name in $names){if($fields[$name] -is [Windows.Forms.ComboBox]){if(!$fields[$name].Items.Contains($s.$name)){$null=$fields[$name].Items.Add($s.$name)};$fields[$name].SelectedItem=$s.$name}else{$fields[$name].Text=$s.$name}}
   Refresh-Ports;$save.Enabled=$true;$status.Text='Connections saved. Complete the connection profile under Advanced setup if needed.'
- }catch{[Windows.Forms.MessageBox]::Show($_.Exception.Message,'Automatic setup needs attention')|Out-Null}finally{$automatic.Enabled=$true;$form.UseWaitCursor=$false}
+ }catch{Show-SetupProblem $_.Exception.Message 'Automatic setup needs attention'}finally{$automatic.Enabled=$true;$form.UseWaitCursor=$false}
 })
 $existing.Add_Click({
  if($fields.Gateway.Text -cnotmatch '^[A-Z0-9][A-Z0-9 /-]{0,9}$'){[Windows.Forms.MessageBox]::Show('Enter the bridge callsign to use on YSF first (maximum 10 characters). This is not your WIRES-X gateway ID.','YSF bridge callsign')|Out-Null;return}
@@ -73,9 +73,9 @@ $existing.Add_Click({
  try{$s=Import-ExistingStation $dialog.SelectedPath -YsfCallsign $fields.Gateway.Text
   foreach($name in $names){$box=$fields[$name];if($box -is [Windows.Forms.ComboBox]){if(!$box.Items.Contains($s.$name)){$null=$box.Items.Add($s.$name)};$box.SelectedItem=$s.$name}else{$box.Text=$s.$name}}
   Refresh-Ports;Refresh-YsfTarget;$save.Enabled=$true;$status.Text='Settings imported. Open the bridge when you are ready.'
- }catch{[Windows.Forms.MessageBox]::Show($_.Exception.Message,'Working bridge was not imported')|Out-Null}finally{$existing.Enabled=$true;$form.UseWaitCursor=$false}
+ }catch{Show-SetupProblem $_.Exception.Message 'Working bridge was not imported'}finally{$existing.Enabled=$true;$form.UseWaitCursor=$false}
 })
-$status=New-Object Windows.Forms.Label;$status.Dock='Fill';$status.Text=if($old -and $old.RadioProfileSha256){'Ready to use. Saved changes take effect the next time the bridge starts.'}else{'Complete Advanced setup before starting the bridge.'};$panel.Controls.Add($status,0,7);$panel.SetColumnSpan($status,2);$panel.RowStyles.Add((New-Object Windows.Forms.RowStyle('Absolute',42)))
+$status=New-Object Windows.Forms.Label;$status.Dock='Fill';$status.Text=if($old -and $old.RadioProfileSha256){'Saved setup found. Open bridge checks whether the connection is ready.'}else{'First use: Advanced setup > Automatic setup, then create or import your connection profile.'};$panel.Controls.Add($status,0,7);$panel.SetColumnSpan($status,2);$panel.RowStyles.Add((New-Object Windows.Forms.RowStyle('Absolute',42)))
 $buttons=New-Object Windows.Forms.FlowLayoutPanel;$buttons.Dock='Fill';$panel.Controls.Add($buttons,0,8);$panel.SetColumnSpan($buttons,2);$panel.RowStyles.Add((New-Object Windows.Forms.RowStyle('Absolute',42)))
 function Save-Fields {
  $s=[pscustomobject]@{SchemaVersion=1;Gateway=$fields.Gateway.Text;OwnRoomId='';PhysicalPort=$fields.PhysicalPort.Text;NativePort=$fields.NativePort.Text;AdapterPort=$fields.AdapterPort.Text;NativePath=$fields.NativePath.Text;RadioProfileSha256=''}
@@ -83,24 +83,39 @@ function Save-Fields {
  if($prior){$changed=$false;foreach($name in @('PhysicalPort','NativePort','AdapterPort','NativePath')){if($s.$name -cne $prior.$name){$changed=$true}};if(!$changed){$s.RadioProfileSha256=$prior.RadioProfileSha256}}
  Save-Station $s;return $s
 }
-$save=New-Object Windows.Forms.Button;$save.Text='Save YSF callsign';$save.AutoSize=$true;$save.Enabled=($null -ne $old);$buttons.Controls.Add($save)
-$save.Add_Click({try{$null=Save-Fields;$status.Text='Saved. Changes take effect the next time the bridge starts.'}catch{[Windows.Forms.MessageBox]::Show($_.Exception.Message,'Settings not saved')|Out-Null}})
+$save=New-Object Windows.Forms.Button;$save.Text='3. Save setup';$save.AutoSize=$true;$save.Enabled=($null -ne $old);$buttons.Controls.Add($save)
+$save.Add_Click({try{$null=Save-Fields;$status.Text='Saved. Select Back to bridge, then 2. Check status. Changes apply on the next start.'}catch{Show-SetupProblem $_.Exception.Message 'Settings not saved'}})
 $capture=New-Object Windows.Forms.Button;$capture.Text='Create connection profile';$capture.AutoSize=$true;$buttons.Controls.Add($capture)
 $capture.Add_Click({try{
  $null=Save-Fields
  $answer=[Windows.Forms.MessageBox]::Show('I own and am authorised to use this HRI-200, FTM-100 and WIRES-X station. My radio is connected and ON for the startup capture. Start a bounded two-minute metadata-only capture? This may close my existing WIRES-X client; other running bridges are refused.','Confirm your own station','YesNo','Warning')
  if($answer -ne 'Yes'){return}
  $p=New-Object Diagnostics.ProcessStartInfo('powershell.exe',('-NoProfile -NonInteractive -ExecutionPolicy Bypass -File "'+(Join-Path $script:Bin 'BridgeSupervisor.ps1')+'" -Capture'));$p.UseShellExecute=$true;$p.Verb='runas';$null=[Diagnostics.Process]::Start($p);$status.Text='Creating a connection profile. Wait two minutes, then reopen Advanced setup and follow its instructions.'
-}catch{[Windows.Forms.MessageBox]::Show($_.Exception.Message,'Capture not started')|Out-Null}})
+}catch{Show-SetupProblem $_.Exception.Message 'Capture not started'}})
 $import=New-Object Windows.Forms.Button;$import.Text='Import connection profile';$import.AutoSize=$true;$buttons.Controls.Add($import)
 $import.Add_Click({try{
  $null=Save-Fields;$dialog=New-Object Windows.Forms.OpenFileDialog;$dialog.Filter='Metadata-only capture (*.json)|*.json';if($dialog.ShowDialog() -ne 'OK'){return}
  if([Windows.Forms.MessageBox]::Show('Import only metadata captured from your own authorised station. It may include private identity/location data. Confirm ownership?','Private profile','YesNo','Warning') -ne 'Yes'){return}
  Import-OwnProfile $dialog.FileName;$status.Text='Connection profile ready. Open the bridge when you are ready.'
-}catch{[Windows.Forms.MessageBox]::Show($_.Exception.Message,'Profile not imported')|Out-Null}})
+}catch{Show-SetupProblem $_.Exception.Message 'Profile not imported'}})
 $close=New-Object Windows.Forms.Button;$close.Text='Close';$close.AutoSize=$true;$buttons.Controls.Add($close);$close.Add_Click({$form.Close()})
 
-$launcher=New-Object Windows.Forms.Button;$launcher.Text='Open bridge';$launcher.AutoSize=$true;$buttons.Controls.Add($launcher);$launcher.Add_Click({Start-Process (Join-Path $script:Bin 'Bridge.exe') -ArgumentList '--launcher'})
+$launcher=New-Object Windows.Forms.Button;$launcher.Text='Back to bridge';$launcher.AutoSize=$true;$buttons.Controls.Add($launcher);$launcher.Add_Click({Start-Process (Join-Path $script:Bin 'Bridge.exe') -ArgumentList '--launcher'})
+function Get-SetupFix([string]$code){
+ switch -Regex ($code){
+  'InvalidStationIdentity|YSF bridge callsign' {return 'Enter your YSF callsign at step 1 (maximum 10 characters), then try again. Do not enter a WIRES-X login or password.'}
+  'DistinctPortsRequired|InvalidStationPort' {return 'The physical connection and both virtual connections must use different COM ports. Open Advanced setup and use Automatic setup; do not guess the port numbers.'}
+  'CaptureYourOwnRadioProfileFirst|IncompleteRadioProfile' {return 'Open Advanced setup. Create or import your own connection profile and follow its confirmation instructions. A WIRES-X login alone is not a connection profile.'}
+  'not loaded both virtual ports|driver signature|driver integrity|restart to finish' {return 'Check Device Manager for the reported driver problem. If Windows requests a restart, finish that before retrying Automatic setup. Do not turn off Windows security. Use the verified installer or ask for support if the driver remains blocked.'}
+  'HRI|USB|healthy genuine' {return 'Check the HRI-200 USB cable and its official Yaesu driver in Device Manager. Then try Advanced setup > Automatic setup. Do not change unrelated devices.'}
+  'supported WIRES-X|SelectOfficialNativeExecutable' {return 'Install and configure the supported official WIRES-X version first. Under Advanced setup, select its Wires-X.exe if it is installed somewhere else. Keep your existing account settings.'}
+  'cleanup|ExistingOwner|CloseWiresXBeforeRecovery' {return 'Return to the bridge window. Close WIRES-X and YMLAN, then use Recover session. Do not delete your settings or run Automatic setup over an interrupted session.'}
+  'administrator|ProcessDiscoveryIncomplete' {return 'Close only this setup/status window, reopen it from the Start menu and approve the administrator prompt. Do not stop a working bridge just to refresh its status.'}
+  default {return "WIRES-X not loading: check its own window and that official WIRES-X is installed and configured.`r`nSave disabled on first use: open Advanced setup, run Automatic setup, then create or import your connection profile.`r`nRoom list not loading: check Internet access and try the room chooser again.`r`nStill stuck: keep the error message for support. Do not delete station data or turn off Windows security."}
+ }
+}
+function Show-SetupProblem([string]$code,[string]$title){$status.Text='Setup needs attention. Read the recommended fix, then try again.';[Windows.Forms.MessageBox]::Show(($code+"`r`n`r`nRecommended fix:`r`n"+(Get-SetupFix $code)),$title,'OK','Warning')|Out-Null}
+$help=New-Object Windows.Forms.Button;$help.Text='Help / recommended fixes';$help.AutoSize=$true;$buttons.Controls.Add($help);$help.Add_Click({[Windows.Forms.MessageBox]::Show((Get-SetupFix ''),'Recommended fixes','OK','Information')|Out-Null})
 $import.Visible=$false;$capture.Visible=$false
 $link=New-Object Windows.Forms.LinkLabel;$link.Text='Free and AS IS. Optional donation to support CumbriaCQ';$link.Dock='Fill';$panel.Controls.Add($link,0,9);$panel.SetColumnSpan($link,2);$panel.RowStyles.Add((New-Object Windows.Forms.RowStyle('Absolute',30)));$link.Add_LinkClicked({Start-Process 'https://cumbriacq.com/donate-support/'})
 [Windows.Forms.Application]::EnableVisualStyles();$null=$form.ShowDialog()

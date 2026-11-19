@@ -105,3 +105,59 @@ function New-DiscoveryBackup($station){
  }
  $entries|ConvertTo-Json|Set-Content -LiteralPath $path -Encoding UTF8
 }
+function Invoke-InterruptedBridgeRecovery($Station,[hashtable]$Ops=$null){
+ # Explicit recovery only. Never stop processes, open ports or discard unknown state.
+ $state=Join-Path $script:Root 'launcher-state';$manifest=Join-Path $state 'owner.json';Assert-DataPath $manifest
+ if(!$Station){$Station=Get-Station}
+ if(!$Ops){$Ops=@{
+  AssertIdle={param($owner)
+   if(@(Find-BridgeAdapters).Count){throw 'ExistingAdapter'}
+   foreach($role in @('Supervisor','Adapter','Observer','Native')){
+    $id=$owner.$role;if(!$id){continue};$p=Get-Process -Id $id.Pid -ErrorAction SilentlyContinue
+    if($p -and $p.StartTime.ToUniversalTime().ToString('o') -ceq $id.Created){throw 'RecoverySessionStillAlive'}
+   }
+   if(Get-Process -Name Wires-X,YmLAN -ErrorAction SilentlyContinue){throw 'CloseWiresXBeforeRecovery'}
+  }
+  ReadAlias={param($path)(Get-ItemProperty -LiteralPath $path -Name FriendlyName -ErrorAction Stop).FriendlyName}
+  WriteAlias={param($path,$value)Set-ItemProperty -LiteralPath $path -Name FriendlyName -Value $value -ErrorAction Stop}
+ }}
+ $lockPath=Join-Path $state 'owner.lock';Assert-DataPath $lockPath
+ $lock=[IO.File]::Open($lockPath,[IO.FileMode]::OpenOrCreate,[IO.FileAccess]::ReadWrite,[IO.FileShare]::None)
+ try{
+  $owner=Get-Content -LiteralPath $manifest -Raw|ConvertFrom-Json
+  if($owner.Version -ne 1 -or $owner.Root -cne $script:Root -or $owner.Tag -cnotmatch '^bridge[a-f0-9]{32}$' -or !$owner.Supervisor){throw 'InvalidRecoveryOwner'}
+  foreach($role in @('Supervisor','Adapter','Observer','Native')){
+   $id=$owner.$role;if(!$id){continue}
+   if($id.Root -cne $script:Root -or $id.Tag -cne $owner.Tag -or $id.Pid -le 0 -or !$id.Created){throw 'InvalidRecoveryOwner'}
+   $null=[DateTime]::Parse($id.Created)
+  }
+  & $Ops.AssertIdle $owner
+  $baseline=Join-Path $script:Root 'discovery-name-backup.json';Assert-DataPath $baseline
+  $original=Get-Content -LiteralPath $baseline -Raw|ConvertFrom-Json
+  if(@($owner.Aliases).Count -ne 2 -or @($original).Count -ne 2 -or @($owner.Aliases.Path|Select-Object -Unique).Count -ne 2){throw 'RecoveryAliasScope'}
+  $ports=@()
+  foreach($alias in $owner.Aliases){
+   if($alias.Path -notmatch '^HKLM:\\SYSTEM\\CurrentControlSet\\Enum\\[^\r\n]+$' -or $alias.Path -match '\.\.' -or $alias.Original -notmatch '\((COM[1-9][0-9]{0,3})\)$'){throw 'RecoveryAliasScope'}
+   $port=$Matches[1];$ports+=$port;$saved=@($original|Where-Object {$_.Path -ceq $alias.Path -and $_.FriendlyName -ceq $alias.Original})
+   $native=$port -ceq $Station.NativePort
+   if($saved.Count -ne 1 -or $native -ne ($alias.Path -like '*\COM0COM\*')){throw 'RecoveryAliasScope'}
+   if(!$native -and $alias.Path -notmatch 'VID_26AA&PID_0002'){throw 'RecoveryAliasScope'}
+   $expected=if($native){'HRI-200 Communication device A ('+$port+')'}else{'WIRESX to YSF physical HRI ('+$port+')'}
+   if($alias.Alias -cne $expected -or $alias.Pending -isnot [bool]){throw 'RecoveryAliasScope'}
+   $current=& $Ops.ReadAlias $alias.Path
+   if($current -cne $alias.Original -and $current -cne $alias.Alias){throw 'RecoveryAliasChanged'}
+  }
+  if((($ports|Sort-Object) -join ',') -cne ((@($Station.PhysicalPort,$Station.NativePort)|Sort-Object) -join ',')){throw 'RecoveryAliasScope'}
+  $stamp=[Guid]::NewGuid().ToString('N');$backup=Join-Path $state ('recovery-'+$stamp+'-before.json');$archive=Join-Path $state ('recovery-'+$stamp+'-completed.json')
+  Assert-DataPath $backup;Assert-DataPath $archive;Copy-Item -LiteralPath $manifest -Destination $backup
+  foreach($alias in $owner.Aliases){
+   & $Ops.AssertIdle $owner;$current=& $Ops.ReadAlias $alias.Path
+   if($current -ceq $alias.Alias){& $Ops.WriteAlias $alias.Path $alias.Original}elseif($current -cne $alias.Original){throw 'RecoveryAliasChanged'}
+   if((& $Ops.ReadAlias $alias.Path) -cne $alias.Original){throw 'RecoveryAliasVerification'}
+  }
+  & $Ops.AssertIdle $owner
+  # A failed/partial restore retains owner.json, allowing a checked retry.
+  Move-Item -LiteralPath $manifest -Destination $archive
+  return @{Recovered=$true;Backup=$backup;ArchivedOwner=$archive;Started=$false}
+ }finally{$lock.Dispose()}
+}

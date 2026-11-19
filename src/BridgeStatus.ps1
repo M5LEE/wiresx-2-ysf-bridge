@@ -3,9 +3,9 @@
 param([switch]$Watch)
 $ErrorActionPreference='Stop';$ProgressPreference='SilentlyContinue'
 function Get-BridgeDisplayState($s){
- $code='Stopped';$message='Ready to start. Keep the FTM off; WIRES-X login can take several minutes.';$room=$null;$canStart=$false;$canStop=$false
+ $code='Stopped';$message='Ready. Select Start bridge; it will launch WIRES-X and connect to your saved YSF room.';$room=$null;$canStart=$false;$canStop=$false;$canRecover=$false
  if($s.ExistingBridge -and !$s.OwnLive){$code='OtherSession';$message='Another bridge installation is running. Start and Stop are disabled here.'}
- elseif($s.OwnerPresent -and !$s.OwnLive){$code='NeedsAttention';$message='An ownership record remains. Inspect cleanup before starting again.'}
+ elseif($s.OwnerPresent -and !$s.OwnLive){$code='NeedsAttention';$message='The previous session did not finish cleanup, often after a reboot. Close WIRES-X and its YMLAN companion, then select Recover session. Your saved setup will be kept.';$canRecover=$true}
  elseif($s.OwnLive){
   $canStop=$true
   if($s.OwnerState -cne 'Running'){$code='Starting';$message='Starting the bridge adapter and WIRES-X. Please wait.'}
@@ -14,10 +14,21 @@ function Get-BridgeDisplayState($s){
   elseif(!$s.ProofFresh -or !$s.Connected){$code='Connecting';$message='Waiting for a WIRES-X room connection. Login can take several minutes.'}
   elseif(!$s.LinkHealthy){$code='Degraded';$message='WIRES-X is connected, but the YSF link is unavailable.';$room=$s.RoomId}
   else{$code='Running';$message='Bridge running. WIRES-X room connected and YSF link healthy.';$room=$s.RoomId}
- }elseif(!$s.SetupReady){$code='SetupRequired';$message='Complete station setup and validate your radio profile before starting.'}
+ }elseif(!$s.SetupReady){$code='SetupRequired';$message='Open Setup. Enter your YSF callsign, choose a room and complete the connection check. Existing WIRES-X account settings are kept.'}
  elseif($s.Fault){$code='Error';$message='Bridge stopped after a fault. Check diagnostics before restarting.';$canStart=$true}
  else{$canStart=$true}
- return @{Code=$code;Summary=$message;Room=$room;CanStart=$canStart;CanStop=$canStop}
+ $next=switch($code){
+  'Running' {'No action needed. Closing this window leaves the bridge running. Use Stop bridge to shut it down.'}
+  'Stopped' {'Already set up? Click 3. Start bridge. First time here? Follow buttons 1, 2 and 3 from top to bottom.'}
+  'NeedsAttention' {"Close WIRES-X and YMLAN. Click Recover session below, then 2. Check status.`r`nWhen ready, click 3. Start bridge. Your saved setup is kept."}
+  'OtherSession' {'Use the status window belonging to the running bridge. Stop it normally there before changing installations. Do not force-close its processes.'}
+  'Starting' {"Allow several minutes; do not keep pressing Start.`r`nIf this persists, check the HRI-200 USB connection and the WIRES-X window for an error."}
+  'Connecting' {"Allow several minutes for WIRES-X login. Check its window for a login or room error.`r`nIf needed, check Internet access and connect to a room in WIRES-X. Do not change your account settings."}
+  'Degraded' {if(!$s.ProgressFresh){'The status update is late; this does not prove that audio has stopped. Click 2. Check status. If it remains stale, keep the error details for support.'}else{'Check Internet access and whether the selected YSF room is online. Use Change YSF room to check the destination, then 2. Check status. Do not change Windows security settings.'}}
+  'SetupRequired' {"Click 1. Set up bridge. Enter your YSF callsign, choose a room and save.`r`nFor first use, complete Advanced setup > Automatic setup and your connection profile. Then click 2. Check status."}
+  'Error' {'Check the HRI-200 USB connection and the WIRES-X window for an error. Click 2. Check status before trying 3. Start bridge. If the fault repeats, keep the error details for support; do not delete your setup.'}
+ }
+ return @{Code=$code;Summary=$message;NextStep=$next;Room=$room;CanStart=$canStart;CanStop=$canStop;CanRecover=$canRecover}
 }
 function Read-BridgeStatusJson($path){
  Assert-DataPath $path;if(!(Test-Path -LiteralPath $path)){return $null}
@@ -65,7 +76,7 @@ function Get-CurrentBridgeStatus {
  $ysf=Get-BridgeYsfDestination $own $progressFresh $progress $settings
  . (Join-Path $PSScriptRoot 'StartupIntegration.ps1')
  $startup=@{Enabled=$false;State='Error';Message='Startup status unavailable.'};try{$startup=Get-BridgeStartupStatus}catch{$startup.Message=$_.Exception.Message}
- return @{Event='Check';Data=@{StatusCode=$view.Code;Summary=$view.Summary;NativeRoom=$view.Room;YsfDestination=$ysf;CanStart=$view.CanStart;CanStop=$view.CanStop;ExistingBridge=$snapshot.ExistingBridge;OwnerManifestPresent=$snapshot.OwnerPresent;SetupReady=$setup;OwnLive=$own;StartupEnabled=$startup.Enabled;StartupState=$startup.State;StartupMessage=$startup.Message;CheckedUtc=[DateTime]::UtcNow.ToString('o');NonInvasive=$true}}
+ return @{Event='Check';Data=@{StatusCode=$view.Code;Summary=$view.Summary;NextStep=$view.NextStep;NativeRoom=$view.Room;YsfDestination=$ysf;CanStart=$view.CanStart;CanStop=$view.CanStop;CanRecover=$view.CanRecover;ExistingBridge=$snapshot.ExistingBridge;OwnerManifestPresent=$snapshot.OwnerPresent;SetupReady=$setup;OwnLive=$own;StartupEnabled=$startup.Enabled;StartupState=$startup.State;StartupMessage=$startup.Message;CheckedUtc=[DateTime]::UtcNow.ToString('o');NonInvasive=$true}}
 }
 function Get-BridgeStatusResponse {
  try{return (Get-CurrentBridgeStatus|ConvertTo-Json -Depth 4 -Compress)}catch{return (@{Event='Check';Data=@{StatusCode='Error';Summary='Unable to verify bridge status. Run the launcher as administrator and check diagnostics.';CanStart=$false;CanStop=$false;StartupEnabled=$false;StartupState='Error';StartupMessage=$_.Exception.Message}}|ConvertTo-Json -Depth 3 -Compress)}

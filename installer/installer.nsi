@@ -4,7 +4,7 @@ Unicode True
 !include "x64.nsh"
 !include "WinVer.nsh"
 !define PRODUCT "WiresX 2 YSF Bridge"
-!define VERSION "0.1.0-alpha.10"
+!define VERSION "0.1.0-alpha.13"
 !define MUI_ICON "../assets/setup.ico"
 !define MUI_UNICON "../assets/bridge.ico"
 !define KEY "Software\Microsoft\Windows\CurrentVersion\Uninstall\M5LEE.WIRESXtoYSF"
@@ -14,20 +14,20 @@ InstallDir "$PROGRAMFILES64\M5LEE\WiresX-2-YSF-Bridge"
 RequestExecutionLevel admin
 SetCompressor /SOLID lzma
 ManifestSupportedOS all
-VIProductVersion "0.1.0.10"
+VIProductVersion "0.1.0.13"
 VIAddVersionKey /LANG=1033 "ProductName" "${PRODUCT}"
 VIAddVersionKey /LANG=1033 "ProductVersion" "${VERSION}"
-VIAddVersionKey /LANG=1033 "FileVersion" "0.1.0.10"
+VIAddVersionKey /LANG=1033 "FileVersion" "0.1.0.13"
 VIAddVersionKey /LANG=1033 "FileDescription" "Experimental alpha bridge tools installer"
 VIAddVersionKey /LANG=1033 "LegalCopyright" "Copyright (c) 2026 M5LEE"
 !define MUI_ABORTWARNING
-!define MUI_WELCOMEPAGE_TEXT "WiresX 2 YSF Bridge by M5LEE - experimental alpha.$\r$\n$\r$\nWIRES-X must already be installed, configured and working with your account and genuine HRI-200. Set up WIRES-X first.$\r$\n$\r$\nChoose the YSF bridge callsign and destination. The bridge follows the room currently connected in WIRES-X.$\r$\n$\r$\nAlpha.10 adds Apply YSF room between overs without restarting WIRES-X, stronger old-room logout and improved audio packet handling. Optional Windows sign-in startup is retained; Windows automatic sign-in is never configured.$\r$\n$\r$\nBefore upgrading, Stop this installed bridge and Exit its tray app. Running sessions are not stopped by the installer."
+!define MUI_WELCOMEPAGE_TEXT "WiresX 2 YSF Bridge by M5LEE - experimental alpha.$\r$\n$\r$\nSet up official WIRES-X first with your existing account and genuine HRI-200.$\r$\n$\r$\nAlpha.13 makes setup clearer: 1. Set up bridge, 2. Check status, 3. Start bridge. It adds recommended fixes and guarded recovery after an interrupted session.$\r$\n$\r$\nBefore upgrading, Stop bridge, wait for cleanup and Exit its tray app. Running sessions are not stopped by the installer.$\r$\n$\r$\nPlease report problems through GitHub Issues rather than messaging M5LEE directly wherever possible."
 !insertmacro MUI_PAGE_WELCOME
 !insertmacro MUI_PAGE_LICENSE "../LICENSE"
 !insertmacro MUI_PAGE_COMPONENTS
 !insertmacro MUI_PAGE_DIRECTORY
 !insertmacro MUI_PAGE_INSTFILES
-!define MUI_FINISHPAGE_TEXT "Installation complete.$\r$\n$\r$\nSet up WIRES-X first. Check your YSF bridge callsign and destination in setup, then Open launcher.$\r$\n$\r$\nThe launcher has readable live status and a tray icon. Closing its window hides it to the tray, not Stop.$\r$\n$\r$\nOptional: tick Start bridge and WIRES-X automatically when I sign in. This backs up/disables only matching WIRES-X/YMLAN startup shortcuts. Untick to restore them. It does not start the bridge now or enable Windows automatic sign-in.$\r$\n$\r$\nExisting private station data is retained. Experimental and AS IS; donations are optional."
+!define MUI_FINISHPAGE_TEXT "Installation complete.$\r$\n$\r$\nEnter your YSF callsign, choose a room and select 3. Save setup. First use also needs Advanced setup and a valid connection profile.$\r$\n$\r$\nSelect Back to bridge, then 2. Check status and 3. Start bridge. WIRES-X starts automatically; allow several minutes for login.$\r$\n$\r$\nUse What to do next or Help / recommended fixes if something is missing. Closing the status window does not stop the bridge.$\r$\n$\r$\nExisting station data is retained. Experimental and AS IS; donations are optional."
 !define MUI_FINISHPAGE_RUN "$INSTDIR\Bridge.exe"
 !define MUI_FINISHPAGE_RUN_PARAMETERS "--setup"
 !define MUI_FINISHPAGE_RUN_TEXT "Set up my bridge"
@@ -91,6 +91,8 @@ Section "Application (required)" Core
  File "../docs/VERIFICATION.md"
  File "../docs/LIVE-YSF-APPLY.md"
  File "../docs/RELEASE-alpha.10.md"
+ File "../docs/RELEASE-alpha.13.md"
+ File "../docs/TROUBLESHOOTING.md"
  File "../docs/DEVELOPMENT.md"
  File "../docs/C4FM-METADATA-PROFILES.md"
  File "../docs/YAESU-TERMS-REVIEW.md"
@@ -200,6 +202,8 @@ Section "Uninstall"
  Delete "$INSTDIR\docs\VERIFICATION.md"
  Delete "$INSTDIR\docs\LIVE-YSF-APPLY.md"
  Delete "$INSTDIR\docs\RELEASE-alpha.10.md"
+ Delete "$INSTDIR\docs\RELEASE-alpha.13.md"
+ Delete "$INSTDIR\docs\TROUBLESHOOTING.md"
  Delete "$INSTDIR\docs\DEVELOPMENT.md"
  Delete "$INSTDIR\docs\C4FM-METADATA-PROFILES.md"
  Delete "$INSTDIR\docs\YAESU-TERMS-REVIEW.md"

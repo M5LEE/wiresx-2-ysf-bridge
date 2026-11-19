@@ -1,5 +1,5 @@
 [CmdletBinding()]
-param([switch]$Capture,[switch]$Start,[switch]$Stop,[switch]$CheckOnly,[switch]$SelfTest,[switch]$UntilStopped)
+param([switch]$Capture,[switch]$Start,[switch]$Stop,[switch]$Recover,[switch]$CheckOnly,[switch]$SelfTest,[switch]$UntilStopped)
 $ErrorActionPreference='Stop'
 $ProgressPreference='SilentlyContinue'
 . (Join-Path $PSScriptRoot 'PublicRuntime.ps1')
@@ -215,12 +215,14 @@ function Run-Start {
     }finally{$lock.Dispose()}
 }
 try{
-    if(@($Capture,$Start,$Stop,$CheckOnly,$SelfTest|Where-Object {$_}).Count -ne 1){throw 'ChooseExactlyOneAction'}
+    if(@($Capture,$Start,$Stop,$Recover,$CheckOnly,$SelfTest|Where-Object {$_}).Count -ne 1){throw 'ChooseExactlyOneAction'}
     if($SelfTest){throw 'RunSourceTestsSeparately'}
     if($CheckOnly){
         $setupReady=$false;try{$station=Get-Station -RequireProfile;if((Get-FileHash -LiteralPath $station.NativePath).Hash -ceq $script:NativeHash){$setupReady=$true}}catch{}
         $a=@(Find-BridgeAdapters)
         Emit 'Check' @{Root=$script:Root;ExistingBridge=($a.Count -gt 0);AdapterPids=@($a|ForEach-Object {$_.ProcessId});OwnerManifestPresent=(Test-Path -LiteralPath (Join-Path $script:Root 'launcher-state\owner.json'));NonInvasive=$true;SetupReady=$setupReady}
+    }elseif($Recover){
+        Emit 'Recovered' (Invoke-InterruptedBridgeRecovery)
     }elseif($Stop){
         $m=Get-Content -LiteralPath (Join-Path $script:Root 'launcher-state\owner.json') -Raw|ConvertFrom-Json
         if($m.Root -cne $script:Root -or $m.Tag -cnotmatch '^bridge[a-f0-9]{32}$' -or $m.Supervisor.Tag -cne $m.Tag){throw 'InvalidOwner'}
@@ -232,6 +234,8 @@ try{
     }else{Run-Start}
 }catch{
     # Fixed error code/type only: do not echo command lines, endpoints or private data.
-    Emit 'Error' @{Code=($_.Exception.Message -replace '[^A-Za-z0-9,]','');Type=$_.Exception.GetType().Name}
+    $failure=@{Code=($_.Exception.Message -replace '[^A-Za-z0-9,]','');Type=$_.Exception.GetType().Name;Pid=$PID;Utc=[DateTime]::UtcNow.ToString('o')}
+    try{$errorPath=Join-Path $script:Root 'last-controller-error.json';Assert-DataPath $errorPath;$pending=$errorPath+'.'+$PID+'.pending';Assert-DataPath $pending;$failure|ConvertTo-Json|Set-Content -LiteralPath $pending -Encoding UTF8;Move-Item -LiteralPath $pending -Destination $errorPath -Force}catch{}
+    Emit 'Error' $failure
     exit 1
 }

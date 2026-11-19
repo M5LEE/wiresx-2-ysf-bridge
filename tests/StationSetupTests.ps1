@@ -24,9 +24,14 @@ try{
  Check ($script:Bin -ceq $fixture) 'fixture preserves its own runtime binary directory'
  . (Join-Path $fixture 'station-setup.ps1')
  Check ($script:Root -ceq (Join-Path $fixture 'fixture-data') -and $script:Bin -ceq $fixture) 'setup UI remains bound to isolated fixture paths'
- Check ($panel.GetControlFromPosition(0,0).Text -ceq 'YSF bridge callsign') 'normal identity field is explicitly YSF-side only'
+ Check ($panel.GetControlFromPosition(0,0).Text -ceq '1. Your YSF callsign') 'numbered setup begins with the YSF callsign'
  Check (!$fields.ContainsKey('OwnRoomId')) 'no native gateway or own-room field is created'
- Check ($ysfChoose -is [Windows.Forms.Button] -and $panel.GetControlFromPosition(0,1).Text -ceq 'YSF destination room') 'normal setup exposes the YSF room chooser'
+ Check ($ysfChoose -is [Windows.Forms.Button] -and $panel.GetControlFromPosition(0,1).Text -ceq '2. Choose a YSF room') 'second setup step is the YSF room chooser'
+ Check ($save.Text -ceq '3. Save setup') 'third setup step saves without starting anything'
+ Check ($help -is [Windows.Forms.Button] -and $help.Text -ceq 'Help / recommended fixes') 'setup provides a visible help action'
+ Check ((Get-SetupFix 'DistinctPortsRequired') -match 'different' -and (Get-SetupFix 'CaptureYourOwnRadioProfileFirst') -match 'connection profile') 'setup errors have specific recommended fixes'
+ Check ((Get-SetupFix 'Windows has not loaded both virtual ports successfully') -match 'Do not turn off Windows security') 'driver guidance never recommends weakening Windows security'
+ Check ($form.ClientSize.Height -le 450) 'basic setup uses a compact window rather than a full troubleshooting screen'
  Check ($notes.Text -match 'Set up WIRES-X first' -and $notes.Text -match 'room currently connected in WIRES-X') 'simple instructions explain the prerequisite and connected-room behaviour'
  Check ($notes.Text -notmatch '(?i)\b(FTM|HRI|radio|development|metadata|capture|\x41\x49)\b') 'normal instructions stay focused on ordinary bridge setup'
  Check ($advanced.Text -ceq 'Advanced setup') 'advanced tools have a plain-language label'
@@ -70,6 +75,9 @@ try{
  Refresh-Ports
  $fields.AdapterPort.SelectedItem='COM1';$refused=$false;try{$null=Save-Fields}catch{$refused=$_.Exception.Message -ceq 'DistinctPortsRequired'}
  Check $refused 'duplicate role choices are still refused'
+ $script:shownProblem=$null;function Show-SetupProblem([string]$code,[string]$title){$script:shownProblem=$code}
+ $save.Enabled=$true;$save.PerformClick();[Windows.Forms.Application]::DoEvents()
+ Check ($script:shownProblem -ceq 'DistinctPortsRequired') 'Save button routes its failure to recommended-fix guidance'
  Check ((Get-FileHash (Join-Path $script:Root 'station.json')).Hash -ceq $hash) 'invalid choices leave the saved station intact'
  $fields.AdapterPort.SelectedItem='COM10';$form.PerformLayout();[Windows.Forms.Application]::DoEvents()
  Check ($fields.PhysicalPort.Text -ceq 'COM1' -and $fields.NativePort.Text -ceq 'COM2' -and $fields.AdapterPort.Text -ceq 'COM10') 'final controls show all three intended selections'
