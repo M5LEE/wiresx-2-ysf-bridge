@@ -18,6 +18,28 @@ Connect the room currently linked in **official WIRES-X** to a **YSF reflector**
 
 Downloads are public. This is still an **unsigned alpha**, not a beta or a certified production system. Alpha.14 adds automatic interrupted-session recovery at Windows sign-in, retaining the numbered setup and established alpha.10 voice runtime. It does **not** include the experimental receive-recovery changes from alpha.11/12. Previous releases remain available.
 
+## Screenshots
+
+Example screens from a configured station. Use your own callsign and preferred rooms during setup.
+
+### Bridge status
+
+Numbered setup controls, connection status and optional automatic startup at Windows sign-in.
+
+![Bridge running with WIRES-X connected and a healthy YSF link](https://raw.githubusercontent.com/M5LEE/wiresx-2-ysf-bridge/main/assets/screenshots/bridge-running.png)
+
+### YSF reflector configuration
+
+Browse and search the reflector list, select a destination and DG-ID, and apply room changes to the running bridge.
+
+![YSF reflector configuration showing room selection and live apply controls](https://raw.githubusercontent.com/M5LEE/wiresx-2-ysf-bridge/main/assets/screenshots/ysf-configuration.png)
+
+### Running alongside WIRES-X
+
+The bridge follows the room connected in the existing official WIRES-X application.
+
+![Bridge status window alongside the connected official WIRES-X application](https://raw.githubusercontent.com/M5LEE/wiresx-2-ysf-bridge/main/assets/screenshots/bridge-with-wiresx.png)
+
 ## Before you install
 
 You need:
