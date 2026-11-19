@@ -1,6 +1,6 @@
 # WiresX 2 YSF Bridge
 
-**By M5LEE · 0.1.0-alpha.13 · Free, experimental Windows software**
+**By M5LEE · 0.1.0-alpha.14 · Free, experimental Windows software**
 
 Connect the room currently linked in **official WIRES-X** to a **YSF reflector**, using your existing WIRES-X installation and genuine HRI-200. The bridge carries digital voice and supported caller information between the two networks.
 
@@ -10,13 +10,13 @@ Connect the room currently linked in **official WIRES-X** to a **YSF reflector**
 
 | File | Download |
 |---|---|
-| Windows x64 installer | [Setup.exe](https://github.com/M5LEE/wiresx-2-ysf-bridge/releases/download/v0.1.0-alpha.13/WiresX-2-YSF-Bridge-0.1.0-alpha.13-Setup.exe) |
-| Matching source | [Source.zip](https://github.com/M5LEE/wiresx-2-ysf-bridge/releases/download/v0.1.0-alpha.13/WiresX-2-YSF-Bridge-0.1.0-alpha.13-Source.zip) |
-| File checksums | [SHA256SUMS.txt](https://github.com/M5LEE/wiresx-2-ysf-bridge/releases/download/v0.1.0-alpha.13/WiresX-2-YSF-Bridge-0.1.0-alpha.13-SHA256SUMS.txt) |
+| Windows x64 installer | [Setup.exe](https://github.com/M5LEE/wiresx-2-ysf-bridge/releases/download/v0.1.0-alpha.14/WiresX-2-YSF-Bridge-0.1.0-alpha.14-Setup.exe) |
+| Matching source | [Source.zip](https://github.com/M5LEE/wiresx-2-ysf-bridge/releases/download/v0.1.0-alpha.14/WiresX-2-YSF-Bridge-0.1.0-alpha.14-Source.zip) |
+| File checksums | [SHA256SUMS.txt](https://github.com/M5LEE/wiresx-2-ysf-bridge/releases/download/v0.1.0-alpha.14/WiresX-2-YSF-Bridge-0.1.0-alpha.14-SHA256SUMS.txt) |
 
-[Release page](https://github.com/M5LEE/wiresx-2-ysf-bridge/releases/tag/v0.1.0-alpha.13) · [What changed](docs/RELEASE-alpha.13.md) · [Troubleshooting](docs/TROUBLESHOOTING.md)
+[Release page](https://github.com/M5LEE/wiresx-2-ysf-bridge/releases/tag/v0.1.0-alpha.14) · [What changed](docs/RELEASE-alpha.14.md) · [Troubleshooting](docs/TROUBLESHOOTING.md)
 
-Downloads are public. This is still an **unsigned alpha**, not a beta or a certified production system. Alpha.13 combines the established alpha.10 voice runtime with simpler setup, clearer status and safe interrupted-session recovery. It does **not** include the experimental receive-recovery changes from alpha.11/12. Previous releases remain available.
+Downloads are public. This is still an **unsigned alpha**, not a beta or a certified production system. Alpha.14 adds automatic interrupted-session recovery at Windows sign-in, retaining the numbered setup and established alpha.10 voice runtime. It does **not** include the experimental receive-recovery changes from alpha.11/12. Previous releases remain available.
 
 ## Before you install
 
@@ -32,7 +32,7 @@ This is an independent project, not an official Yaesu product. Official WIRES-X 
 
 ## Install and follow 1 → 2 → 3
 
-Run **WiresX-2-YSF-Bridge-0.1.0-alpha.13-Setup.exe**. Leave **Set up my bridge** selected on the final page, or open **Bridge launcher** from the Start menu.
+Run **WiresX-2-YSF-Bridge-0.1.0-alpha.14-Setup.exe**. Leave **Set up my bridge** selected on the final page, or open **Bridge launcher** from the Start menu.
 
 ### 1. Set up bridge
 
@@ -72,19 +72,21 @@ The bridge runs until you stop it or a safety fault occurs. It does not use a no
 
 ## Recover after an interrupted session
 
-A reboot or power interruption can leave a record of the previous session. The bridge refuses to start another session until the old one is safely resolved.
+A reboot or power interruption can leave a record of the previous session. With **Start automatically when I sign in to Windows** enabled, alpha.14 checks and recovers a safely recoverable old session automatically, then starts the bridge and WIRES-X. You do not normally need to click Recover or Start after signing in.
+
+If automatic startup is disabled, or recovery reports a genuine conflict, use the manual procedure:
 
 1. Close **WIRES-X** and its **YMLAN** companion normally.
 2. In the bridge window, select **Recover session** and confirm.
 3. Select **2. Check status**, then **3. Start bridge** when ready.
 
-Recovery checks that the old processes are gone and restores only the bridge's two saved port names. It keeps your callsign, room settings and connection profile, and does **not** start anything. If recovery refuses, follow its error message; do not delete the ownership record or force-close unknown processes. See [recommended fixes](docs/TROUBLESHOOTING.md).
+Recovery checks that the old processes are gone and restores only the bridge's two saved port names. It keeps your callsign, room settings and connection profile. The manual **Recover session** button does not start anything; enabled sign-in startup continues to Start only after recovery succeeds and a fresh readiness check passes. If recovery refuses, follow its error message; do not delete the ownership record or force-close unknown processes. See [recommended fixes](docs/TROUBLESHOOTING.md).
 
 ## Automatic startup
 
 Tick **Start automatically when I sign in to Windows** in the bridge window. At your next interactive sign-in, the launcher starts the adapter before WIRES-X after a short delay. Enabling this option does not start the bridge immediately.
 
-Startup is optional and initially off. It backs up and replaces matching WIRES-X/YMLAN Startup shortcuts; disabling it restores them. Conflicting startup entries are reported for review. It is **not a pre-login service** and does not configure Windows automatic sign-in. Check it on your own PC before relying on unattended operation. An interrupted previous session may still need explicit recovery.
+Startup is optional and initially off. It backs up and replaces matching WIRES-X/YMLAN Startup shortcuts; disabling it restores them. Conflicting startup entries are reported for review. It is **not a pre-login service** and does not configure Windows automatic sign-in. Automatic recovery runs once per sign-in launch and will not override live sessions, changed port names or invalid ownership records. Allow several minutes for WIRES-X login and room reconnection; do not repeatedly restart it while it says Connecting. Test reboot/sign-in on your own PC before relying on unattended operation.
 
 ## Upgrade or uninstall
 
@@ -105,7 +107,7 @@ The installer is unsigned. Fresh-PC setup, universal receiver compatibility, GPS
 - [Compatibility and test coverage](docs/VERIFICATION.md)
 - [Building from source](docs/DEVELOPMENT.md)
 - [C4FM metadata format](docs/C4FM-METADATA-PROFILES.md)
-- [Matching source tag](https://github.com/M5LEE/wiresx-2-ysf-bridge/tree/v0.1.0-alpha.13)
+- [Matching source tag](https://github.com/M5LEE/wiresx-2-ysf-bridge/tree/v0.1.0-alpha.14)
 - [Third-party notices](THIRD_PARTY_NOTICES.md)
 
 ## Licence and optional donations

@@ -1,6 +1,6 @@
 # Compatibility and testing
 
-**WiresX 2 YSF Bridge 0.1.0-alpha.13** remains an experimental alpha. This release focuses on setup, status and interrupted-session recovery while retaining the established alpha.10 voice/protocol and YSF-link runtime. Alpha.11/12's experimental receive-recovery implementation is not included.
+**WiresX 2 YSF Bridge 0.1.0-alpha.14** remains an experimental alpha. This release focuses on setup, status and interrupted-session recovery while retaining the established alpha.10 voice/protocol and YSF-link runtime. Alpha.11/12's experimental receive-recovery implementation is not included.
 
 ## Supported setup
 
@@ -19,7 +19,9 @@ Windows 10 or later x64, .NET Framework 4.8, official WIRES-X 2.0.1.0, a genuine
 | Application | Setup, import, sign-in integration, status-worker lifecycle, tray behaviour and active-installation protections |
 | Package | Extracted assembly hashes and complete upstream notices/source; matching versioned source and download checksums |
 
-Hardware and recovery regression tests use isolated fixtures. They do not deliberately power-cycle a station or prove universal unattended recovery. Actual stop/start testing on an existing configured station is separate from a clean-PC installation or new profile capture.
+Hardware and recovery regression tests use isolated fixtures. Automatic-start tests cover successful recovery followed by Start, failed recovery, duplicate suppression, disabled startup and foreign/live sessions.
+
+The recovery implementation also passed an actual Windows reboot with the bridge left running on an existing configured station: after interactive sign-in it archived the interrupted owner, started a new owned session, and reconnected WIRES-X and YSF without manual Recover, Start or room-connect actions. Saved settings, runtime binaries and scheduled-task definitions were preserved. The versioned package carries the same launcher implementation with updated version metadata and passes the Windows regression suite. This is not a sudden power-cut test, universal unattended-recovery qualification, clean-PC installation or new profile capture.
 
 ## Important limits
 
@@ -29,6 +31,6 @@ Hardware and recovery regression tests use isolated fixtures. They do not delibe
 - Queue pressure, missing headers and temporary native-room proof interruptions remain possible. No missing audio is invented or replayed.
 - Secure Boot and Memory Integrity may block the legacy virtual-port dependency. Do not disable Windows security to force it to load.
 - Other radios, receivers and WIRES-X versions, GPS accuracy and long-term reliability are not universally validated.
-- Automatic operation requires interactive Windows sign-in, not pre-login boot. A retained record after an unclean shutdown requires explicit guarded recovery. Check actual reboot/sign-in behaviour on each PC before relying on unattended operation.
+- Automatic operation requires interactive Windows sign-in, not pre-login boot. Enabled startup automatically attempts guarded recovery of a retained interrupted session, but refuses live or unverifiable ownership and does not retry failures in a loop. Check actual reboot/sign-in behaviour on each PC before relying on unattended operation.
 
 See the [user guide](../README.md), [recommended fixes](TROUBLESHOOTING.md) and [source build](DEVELOPMENT.md). Report reproducible faults through [GitHub Issues](https://github.com/M5LEE/wiresx-2-ysf-bridge/issues) rather than direct messages to M5LEE wherever possible.

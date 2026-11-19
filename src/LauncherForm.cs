@@ -28,7 +28,7 @@ sealed class LauncherForm:Form {
  readonly Icon originalIcon;
  Icon statusIcon;
  string iconCode,lastActionError;
- bool busy,changingStartup,applyingStatus,autoPending,allowClose;
+ bool busy,changingStartup,applyingStatus,autoPending,allowClose,autoRecoveryPending,autoRecoveryAttempted,needFreshCheck;
  DateTime pendingStartUntil=DateTime.MinValue;
  [DllImport("user32.dll")] static extern bool DestroyIcon(IntPtr handle);
  public LauncherForm(string root):this(root,false,null,null,null){}
@@ -95,15 +95,22 @@ sealed class LauncherForm:Form {
    string script=Path.Combine(root,"BridgeSupervisor.ps1");if(!File.Exists(script))throw new FileNotFoundException("Launcher backend not installed",script);
    // Controller lifetime must not depend on this UI or redirected UI-owned pipes.
    var process=new Process {StartInfo=new ProcessStartInfo("powershell.exe","-NoProfile -NonInteractive -ExecutionPolicy Bypass -File \""+script+"\" -"+action+(action=="Start"?" -UntilStopped":"")) {UseShellExecute=true,WindowStyle=ProcessWindowStyle.Hidden,WorkingDirectory=root},EnableRaisingEvents=true};
-   process.Exited+=delegate{int code=process.ExitCode,pid=process.Id;process.Dispose();if(!IsDisposed && IsHandleCreated)BeginInvoke(new Action(delegate{lastActionError=code==0?null:ExplainActionError(ReadActionError(pid));pendingStartUntil=DateTime.MinValue;CheckStatus();}));};process.Start();
+   process.Exited+=delegate{int code=process.ExitCode,pid=process.Id;process.Dispose();if(!IsDisposed && IsHandleCreated)BeginInvoke(new Action(delegate{CompleteAction(action,code,code==0?null:ReadActionError(pid));}));};process.Start();
   }
   SetPresentation(action=="Start"?"Starting":action=="Recover"?"Recovering":"Stopping",action=="Start"?"Preparing the bridge, then launching WIRES-X. Login can take several minutes.":action=="Recover"?"Checking the old session and restoring its saved port names. Nothing will be started.":"Stopping the bridge and restoring its connections. Please wait.");
   start.Enabled=false;stop.Enabled=false;recover.Enabled=false;startItem.Enabled=false;stopItem.Enabled=false;
- }catch(Exception e){pendingStartUntil=DateTime.MinValue;SetPresentation("Error",e.Message);if(actionHook==null)OpenStatus();}}
+ }catch(Exception e){autoRecoveryPending=false;autoPending=false;pendingStartUntil=DateTime.MinValue;SetPresentation("Error",e.Message);if(actionHook==null)OpenStatus();}}
+ void CompleteAction(string action,int code,string error){
+  lastActionError=code==0?null:ExplainActionError(error);pendingStartUntil=DateTime.MinValue;
+  if(action=="Recover" && autoRecoveryPending){autoRecoveryPending=false;autoPending=code==0;if(code!=0)OpenStatus();}
+  // Discard any status query started before the recovery process released its lock.
+  if(busy)needFreshCheck=true;else CheckStatus();
+ }
  void CheckStatus(){
   if(busy || changingStartup || IsDisposed)return;busy=true;check.Enabled=false;var worker=new BackgroundWorker();
   worker.DoWork+=delegate(object sender,DoWorkEventArgs e){e.Result=statusProvider!=null?statusProvider():statusWorker.Read();};
   worker.RunWorkerCompleted+=delegate(object sender,RunWorkerCompletedEventArgs e){busy=false;if(!IsDisposed){
+   if(needFreshCheck){needFreshCheck=false;worker.Dispose();CheckStatus();return;}
    check.Enabled=true;
    try{
     if(e.Error!=null)throw e.Error;var response=Parse(Convert.ToString(e.Result));if(!response.ContainsKey("Event") || !Object.Equals(response["Event"],"Check"))throw new Exception("Invalid status response");var data=(Dictionary<string,object>)response["Data"];
@@ -112,10 +119,16 @@ sealed class LauncherForm:Form {
     else if(code!="Stopped")pendingStartUntil=DateTime.MinValue;
     if(lastActionError!=null && (code=="Stopped" || code=="Error" || code=="NeedsAttention")){code="Error";message=lastActionError;}
     SetPresentation(code,message);if(lastActionError==null && Value(data,"NextStep").Length>0)nextSteps.Text="What to do next\r\n"+Value(data,"NextStep");start.Enabled=canStart;stop.Enabled=canStop;startItem.Enabled=canStart;stopItem.Enabled=canStop;
-    recover.Visible=Flag(data,"CanRecover");recover.Enabled=Flag(data,"CanRecover");
+    recover.Visible=Flag(data,"CanRecover");recover.Enabled=Flag(data,"CanRecover") && !autoRecoveryPending;
     string room=Value(data,"NativeRoom");output.Text="WIRES-X room: "+(room.Length>0?room:"Not connected")+"\r\nYSF room: "+Value(data,"YsfDestination")+"\r\nChecked: "+DateTime.Now.ToString("HH:mm:ss");
     applyingStatus=true;startupBox.Checked=Flag(data,"StartupEnabled");applyingStatus=false;startupBox.Enabled=!changingStartup && Value(data,"StartupState")!="Error";startupInfo.Text=Value(data,"StartupMessage");
-    if(autoPending){autoPending=false;if(canStart && Flag(data,"StartupEnabled") && Value(data,"StartupState")=="Enabled")Action("Start");else if(code!="Running" && code!="Starting" && code!="Connecting")OpenStatus();}
+    if(autoPending){
+     autoPending=false;bool armed=Flag(data,"StartupEnabled") && Value(data,"StartupState")=="Enabled";
+     if(canStart && armed)Action("Start");
+     else if(armed && code=="NeedsAttention" && Flag(data,"CanRecover") && !autoRecoveryAttempted){
+      autoRecoveryAttempted=true;autoRecoveryPending=true;Action("Recover");
+     }else if(code!="Running" && code!="Starting" && code!="Connecting")OpenStatus();
+    }
    }catch(Exception error){applyingStatus=false;start.Enabled=false;stop.Enabled=false;recover.Enabled=false;startItem.Enabled=false;stopItem.Enabled=false;startupBox.Enabled=false;SetPresentation("Error",error.Message);if(autoPending){autoPending=false;OpenStatus();}}
   }worker.Dispose();};worker.RunWorkerAsync();
  }

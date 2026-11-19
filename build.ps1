@@ -54,6 +54,10 @@ if(!$SkipTests){
  if($LASTEXITCODE){throw 'Launcher UI test build failed'}
  & (Join-Path $tests 'LauncherUiTests.exe') $bin (Join-Path $root 'tests\launcher-ui')
  if($LASTEXITCODE){throw 'Launcher tray/autostart UI tests failed'}
+ & $csc /nologo /warnaserror+ /r:System.Windows.Forms.dll /r:System.Drawing.dll /r:System.Web.Extensions.dll ("/out:"+(Join-Path $tests 'AutomaticRecoveryUiTests.exe')) (Join-Path $root 'tests\AutomaticRecoveryUiTests.cs')
+ if($LASTEXITCODE){throw 'Automatic recovery UI test build failed'}
+ & (Join-Path $tests 'AutomaticRecoveryUiTests.exe') $bin
+ if($LASTEXITCODE){throw 'Automatic interrupted-session recovery tests failed'}
  & $csc /nologo /warnaserror+ /r:System.Web.Extensions.dll ("/out:"+(Join-Path $tests 'StatusWorkerTests.exe')) (Join-Path $root 'tests\StatusWorkerTests.cs')
  if($LASTEXITCODE){throw 'Status worker test compilation failed'}
  & (Join-Path $tests 'StatusWorkerTests.exe') $bin (Join-Path $root 'tests')
